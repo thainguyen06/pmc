@@ -11,7 +11,7 @@ use crate::{
 };
 
 use std::{
-    collections::HashSet, env, fs::File, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration,
+    collections::{BTreeMap, HashSet}, env, fs::File, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration,
 };
 
 use nix::{
@@ -24,7 +24,6 @@ use chrono::{DateTime, Utc};
 use global_placeholders::global;
 use macros_rs::{crashln, string, ternary, then};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -221,6 +220,37 @@ fn kill_children(children: Vec<i64>) {
     }
 }
 
+/// Load environment variables from .env file in the specified directory
+fn load_dotenv(path: &PathBuf) -> BTreeMap<String, String> {
+    let env_file = path.join(".env");
+    let mut env_vars = BTreeMap::new();
+    
+    if env_file.exists() && env_file.is_file() {
+        match dotenvy::from_path_iter(&env_file) {
+            Ok(iter) => {
+                for item in iter {
+                    match item {
+                        Ok((key, value)) => {
+                            env_vars.insert(key, value);
+                        }
+                        Err(err) => {
+                            log::warn!("Failed to parse .env entry: {}", err);
+                        }
+                    }
+                }
+                if !env_vars.is_empty() {
+                    log::info!("Loaded {} environment variables from .env file", env_vars.len());
+                }
+            }
+            Err(err) => {
+                log::warn!("Failed to read .env file at {:?}: {}", env_file, err);
+            }
+        }
+    }
+    
+    env_vars
+}
+
 impl Runner {
     pub fn new() -> Self { dump::read() }
 
@@ -273,14 +303,32 @@ impl Runner {
                 },
             };
 
+            // Load environment variables from .env file
+            let dotenv_vars = load_dotenv(&path);
+            let system_env = unix::env();
+            
+            // Prepare process environment with dotenv variables having priority
+            let mut process_env = Vec::with_capacity(dotenv_vars.len() + system_env.len());
+            // Add dotenv variables first (higher priority)
+            for (key, value) in &dotenv_vars {
+                process_env.push(format!("{}={}", key, value));
+            }
+            // Then add system environment
+            process_env.extend(system_env);
+
             let pid = process_run(ProcessMetadata {
                 args: config.args,
                 name: name.clone(),
                 shell: config.shell,
                 command: command.clone(),
                 log_path: config.log_path,
-                env: unix::env(),
+                env: process_env,
             }).unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
+
+            // Merge .env variables into the stored environment (dotenv takes priority)
+            let mut stored_env: Env = env::vars().collect();
+            // Extend with dotenv variables (this overwrites any existing keys)
+            stored_env.extend(dotenv_vars);
 
             self.list.insert(
                 id,
@@ -296,7 +344,7 @@ impl Runner {
                     name: name.clone(),
                     started: Utc::now(),
                     script: command.clone(),
-                    env: env::vars().collect(),
+                    env: stored_env,
                 },
             );
         }
@@ -323,8 +371,21 @@ impl Runner {
                 process.crash.crashed = true;
                 println!("{} Failed to set working directory {:?}\nError: {:#?}", *helpers::FAIL, path, err);
             } else {
-                let mut temp_env = process.env.iter().map(|(key, value)| format!("{}={}", key, value)).collect::<Vec<String>>();
-                temp_env.extend(unix::env());
+                // Load environment variables from .env file
+                let dotenv_vars = load_dotenv(&path);
+                let system_env = unix::env();
+                
+                // Prepare process environment with dotenv variables having priority
+                let stored_env_vec: Vec<String> = process.env.iter().map(|(key, value)| format!("{}={}", key, value)).collect();
+                let mut temp_env = Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
+                // Add dotenv variables first (highest priority)
+                for (key, value) in &dotenv_vars {
+                    temp_env.push(format!("{}={}", key, value));
+                }
+                // Then add stored environment
+                temp_env.extend(stored_env_vec);
+                // Finally add system environment
+                temp_env.extend(system_env);
 
                 process.pid = process_run(ProcessMetadata {
                     args: config.args,
@@ -339,7 +400,11 @@ impl Runner {
                 process.children = vec![];
                 process.started = Utc::now();
                 process.crash.crashed = false;
-                process.env.extend(env::vars().collect::<Env>());
+                
+                // Merge .env variables into the stored environment (dotenv takes priority)
+                let mut updated_env: Env = env::vars().collect();
+                updated_env.extend(dotenv_vars);
+                process.env.extend(updated_env);
 
                 then!(dead, process.restarts += 1);
                 then!(dead, process.crash.value += 1);
