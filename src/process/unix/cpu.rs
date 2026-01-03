@@ -65,6 +65,26 @@ pub fn get_cpu_percent(pid: u32) -> f64 {
 #[cfg(target_os = "linux")]
 pub fn get_cpu_percent_fast(pid: u32) -> f64 {
     use std::fs;
+    use std::sync::OnceLock;
+    
+    // Cache the number of CPUs as it doesn't change during execution
+    static NUM_CPUS: OnceLock<usize> = OnceLock::new();
+    let num_cpus = *NUM_CPUS.get_or_init(|| num_cpus::get());
+    
+    // Cache clock ticks per second - retrieve it once from the system
+    static CLOCK_TICKS_PER_SEC: OnceLock<f64> = OnceLock::new();
+    let clock_ticks = *CLOCK_TICKS_PER_SEC.get_or_init(|| {
+        // Try to get actual system value using sysconf
+        unsafe {
+            let ticks = libc::sysconf(libc::_SC_CLK_TCK);
+            if ticks > 0 {
+                ticks as f64
+            } else {
+                // Fallback to standard Linux value if sysconf fails
+                100.0
+            }
+        }
+    });
     
     let stat_path = format!("/proc/{}/stat", pid);
     if let Ok(stat_content) = fs::read_to_string(&stat_path) {
@@ -87,24 +107,18 @@ pub fn get_cpu_percent_fast(pid: u32) -> f64 {
             if let Ok(uptime_content) = fs::read_to_string("/proc/uptime") {
                 if let Some(uptime_str) = uptime_content.split_whitespace().next() {
                     if let Ok(uptime) = uptime_str.parse::<f64>() {
-                        // CLK_TCK (clock ticks per second) is typically 100 on Linux
-                        // but can vary. Common values are 100 (most Linux), 1000 (some systems)
-                        // Using sysconf(_SC_CLK_TCK) would be ideal but requires libc calls
-                        // For now, use 100 which is standard for most Linux systems
-                        const CLOCK_TICKS_PER_SEC: f64 = 100.0;
-                        
                         // Calculate process uptime in seconds
-                        let process_uptime = uptime - (starttime / CLOCK_TICKS_PER_SEC);
+                        let process_uptime = uptime - (starttime / clock_ticks);
                         
                         if process_uptime > 0.0 {
                             // Total CPU time used by process in seconds
-                            let process_cpu_time = (utime + stime) / CLOCK_TICKS_PER_SEC;
+                            let process_cpu_time = (utime + stime) / clock_ticks;
                             
                             // CPU percentage = (CPU time / elapsed time) * 100
                             let cpu_percent = (process_cpu_time / process_uptime) * 100.0;
                             
                             // Clamp to reasonable value
-                            return cpu_percent.min(100.0 * num_cpus::get() as f64);
+                            return cpu_percent.min(100.0 * num_cpus as f64);
                         }
                     }
                 }
