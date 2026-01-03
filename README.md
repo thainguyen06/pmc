@@ -1,8 +1,8 @@
-# Process Management Controller (PMC)
+# Process Management Controller (OPM)
 
 ## Overview
 
-PMC (Process Management Controller) is a simple PM2 alternative written in Rust. It provides a command-line/api interface to start, stop, restart, and manage fork processes
+OPM (Process Management Controller) is a simple PM2 alternative written in Rust. It provides a command-line/api interface to start, stop, restart, and manage fork processes
 
 ## Features
 
@@ -13,57 +13,57 @@ PMC (Process Management Controller) is a simple PM2 alternative written in Rust.
 
 ## Usage
 
-```bas
+```bash
 # Start/Restart a process
-pmc start <id/name> or <script> [--name <name>]
+opm start <id/name> or <script> [--name <name>]
 
 # Restart a process
-pmc restart <id/name>
+opm restart <id/name>
 
 # Stop/Kill a process
-pmc stop <id/name>
+opm stop <id/name>
 
 # Remove a process
-pmc remove <id/name>
+opm remove <id/name>
 
 # Get process info
-pmc info <id/name>
+opm info <id/name>
 
 # Get process env
-pmc env <id/name>
+opm env <id/name>
 
 # Save all processes to dumpfile
-pmc save
+opm save
 
 # Restore all processes
-pmc restore
+opm restore
 
 # List all processes
-pmc list [--format <raw|json|default>]
+opm list [--format <raw|json|default>]
 
 # Get process logs
-pmc logs <id/name> [--lines <num_lines>]
+opm logs <id/name> [--lines <num_lines>]
 
 # Reset process index
-pmc daemon reset
+opm daemon reset
 
 # Stop daemon
-pmc daemon stop
+opm daemon stop
 
 # Start/Restart daemon
-pmc daemon start
+opm daemon start
 
 # Check daemon health
-pmc daemon health
+opm daemon health
 ```
 
-For more command information, check out `pmc --help`
+For more command information, check out `opm --help`
 
 ### Installation
 
 Pre-built binaries for Linux, MacOS, and WSL can be found on the [releases](releases) page.
 
-There is no windows support yet. Install from crates.io using `cargo install pmc` (requires clang++)
+There is no windows support yet. Install from crates.io using `cargo install opm` (requires clang++)
 
 #### Building
 

@@ -9,7 +9,7 @@ use std::{
     io::prelude::*,
 };
 
-use pmc::{
+use opm::{
     file::Exists,
     helpers,
     process::{Env, Runner},

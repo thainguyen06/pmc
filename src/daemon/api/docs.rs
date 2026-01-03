@@ -1,4 +1,4 @@
-use pmc::config;
+use opm::config;
 use std::borrow::Cow;
 
 const INDEX: &str = include_str!("../static/index.html");

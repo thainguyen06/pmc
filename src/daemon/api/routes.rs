@@ -5,7 +5,7 @@ use global_placeholders::global;
 use macros_rs::{fmtstr, string, ternary, then};
 use prometheus::{Encoder, TextEncoder};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use pmc::process::unix::NativeProcess as Process;
+use opm::process::unix::NativeProcess as Process;
 use reqwest::header::HeaderValue;
 use tera::Context;
 use utoipa::ToSchema;
@@ -26,7 +26,7 @@ use super::{
     EnableWebUI, TeraState,
 };
 
-use pmc::{
+use opm::{
     config, file, helpers,
     process::{dump, http::client, ItemSingle, ProcessItem, Runner, get_process_cpu_usage_with_children, get_process_memory_with_children},
 };

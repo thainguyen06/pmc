@@ -49,7 +49,7 @@ enum Daemon {
 
 
 
-// add pmc restore command
+// add opm restore command
 #[derive(Subcommand)]
 enum Commands {
     /// Import process from environment file
@@ -201,7 +201,7 @@ fn main() {
     let informer = update_informer::new(registry::Crates, "opm", env!("CARGO_PKG_VERSION"));
 
     if let Some(version) = informer.check_version().ok().flatten() {
-        println!("{} New version is available: {version}", *pmc::helpers::WARN);
+        println!("{} New version is available: {version}", *opm::helpers::WARN);
     }
 
     globals::init();

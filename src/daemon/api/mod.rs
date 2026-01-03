@@ -8,7 +8,7 @@ use crate::webui::{self, assets::NamedFile};
 use helpers::{create_status, NotFound};
 use include_dir::{include_dir, Dir};
 use lazy_static::lazy_static;
-use pmc::{config, process};
+use opm::{config, process};
 use prometheus::{opts, register_counter, register_gauge, register_histogram, register_histogram_vec};
 use prometheus::{Counter, Gauge, Histogram, HistogramVec};
 use serde_json::{json, Value};

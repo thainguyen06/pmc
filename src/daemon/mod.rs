@@ -8,12 +8,12 @@ use fork::{daemon, Fork};
 use global_placeholders::global;
 use macros_rs::{crashln, str, string, ternary, then};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use pmc::process::{MemoryInfo, unix::NativeProcess as Process};
+use opm::process::{MemoryInfo, unix::NativeProcess as Process};
 use serde::Serialize;
 use serde_json::json;
 use std::{process, thread::sleep, time::Duration};
 
-use pmc::{
+use opm::{
     config, file,
     helpers::{self, ColoredString},
     process::{hash, id::Id, Runner, Status, get_process_cpu_usage_with_children},
@@ -38,7 +38,7 @@ extern "C" fn handle_termination_signal(_: libc::c_int) {
 fn restart_process() {
     for (id, item) in Runner::new().items_mut() {
         let mut runner = Runner::new();
-        let children = pmc::process::process_find_children(item.pid);
+        let children = opm::process::process_find_children(item.pid);
 
         if !children.is_empty() && children != item.children {
             log!("[daemon] added", "children" => format!("{children:?}"));
@@ -181,9 +181,9 @@ pub fn health(format: &String) {
             "raw" => println!("{:?}", data[0]),
             "json" => println!("{json}"),
             "default" => {
-                println!("{}\n{table}\n", format!("PMC daemon information").on_bright_white().black());
-                println!(" {}", format!("Use `pmc daemon restart` to restart the daemon").white());
-                println!(" {}", format!("Use `pmc daemon reset` to clean process id values").white());
+                println!("{}\n{table}\n", format!("OPM daemon information").on_bright_white().black());
+                println!(" {}", format!("Use `opm daemon restart` to restart the daemon").white());
+                println!(" {}", format!("Use `opm daemon reset` to clean process id values").white());
             }
             _ => {}
         };
@@ -192,16 +192,16 @@ pub fn health(format: &String) {
 
 pub fn stop() {
     if pid::exists() {
-        println!("{} Stopping PMC daemon", *helpers::SUCCESS);
+        println!("{} Stopping OPM daemon", *helpers::SUCCESS);
 
         match pid::read() {
             Ok(pid) => {
-                if let Err(err) = pmc::process::process_stop(pid.get()) {
+                if let Err(err) = opm::process::process_stop(pid.get()) {
                     log!("[daemon] failed to stop", "error" => err);
                 }
                 pid::remove();
                 log!("[daemon] stopped", "pid" => pid);
-                println!("{} PMC daemon stopped", *helpers::SUCCESS);
+                println!("{} OPM daemon stopped", *helpers::SUCCESS);
             }
             Err(err) => crashln!("{} Failed to read PID file: {}", *helpers::FAIL, err),
         }

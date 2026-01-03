@@ -2,13 +2,13 @@ use colored::Colorize;
 use lazy_static::lazy_static;
 use macros_rs::{crashln, string, ternary, then};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use pmc::process::{MemoryInfo, unix::NativeProcess as Process};
+use opm::process::{MemoryInfo, unix::NativeProcess as Process};
 use regex::Regex;
 use serde::Serialize;
 use serde_json::json;
 use std::fs;
 
-use pmc::{
+use opm::{
     config, file,
     helpers::{self, ColoredString},
     log,
@@ -359,7 +359,7 @@ impl<'i> Internal<'i> {
                 crashln!("{} Impossible to get your home directory", *helpers::FAIL);
             }
         } else {
-            let data: (pmc::process::Process, Runner);
+            let data: (opm::process::Process, Runner);
             let Some(servers) = config::servers().servers else {
                 crashln!("{} Failed to read servers", *helpers::FAIL)
             };

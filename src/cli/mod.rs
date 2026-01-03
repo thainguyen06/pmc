@@ -6,7 +6,7 @@ pub(crate) mod internal;
 
 use internal::Internal;
 use macros_rs::{crashln, string, ternary};
-use pmc::{helpers, process::Runner};
+use opm::{helpers, process::Runner};
 use std::env;
 
 pub(crate) fn format(server_name: &String) -> (String, String) {

@@ -1,29 +1,29 @@
 import = [".maid/build.toml", ".maid/server.toml"]
 
 [project]
-name = "pmc"
+name = "opm"
 version = "2.0.0"
 
 [tasks]
 clean = { script = ["rm -rf bin", "mkdir bin"] }
-api = { script = ["maid install -q", "pmc daemon start --api"] }
-webui = { script = ["maid install -q", "pmc daemon start --webui"] }
+api = { script = ["maid install -q", "opm daemon start --api"] }
+webui = { script = ["maid install -q", "opm daemon start --webui"] }
 
 [tasks.build]
 depends = ["clean"]
 script = [
    "cargo zigbuild --release", 
-   "cp target/release/pmc bin/pmc"
+   "cp target/release/opm bin/opm"
 ]
 
 [tasks.build.cache]
 path = "src"
-target = ["bin/pmc"]
+target = ["bin/opm"]
 
 [tasks.install]
 script = [
-   "killall pmc",
+   "killall opm",
    "maid build -q", 
-   "sudo cp bin/pmc /usr/local/bin",
+   "sudo cp bin/opm /usr/local/bin",
    "echo Copied binary!"
 ]
