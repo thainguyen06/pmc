@@ -594,9 +594,13 @@ impl Runner {
             let mut memory_usage: Option<MemoryInfo> = None;
             let mut cpu_percent: Option<f64> = None;
 
-            if let Ok(process) = unix::NativeProcess::new(item.pid as u32) && 
+            // Use new_fast() to avoid CPU measurement delays for list view
+            // This uses average CPU since process start instead of current instantaneous CPU
+            // For accurate current CPU, use the info endpoint which measures over a 100ms window
+            if let Ok(process) = unix::NativeProcess::new_fast(item.pid as u32) && 
                 let Ok(_mem_info_native) = process.memory_info() {
-                cpu_percent = Some(get_process_cpu_usage_with_children_from_process(&process, item.pid as i64));
+                // Use fast CPU calculation that includes children (important for .sh scripts)
+                cpu_percent = Some(get_process_cpu_usage_with_children_fast(item.pid as i64));
                 memory_usage = get_process_memory_with_children(item.pid as i64);
             }
 
@@ -764,6 +768,19 @@ pub fn get_process_cpu_usage_percentage(pid: i64) -> f64 {
     }
 }
 
+/// Get the CPU usage percentage of the process (fast version without delay)
+pub fn get_process_cpu_usage_percentage_fast(pid: i64) -> f64 {
+    match unix::NativeProcess::new_fast(pid as u32) {
+        Ok(process) => {
+            match process.cpu_percent() {
+                Ok(cpu_percent) => cpu_percent.min(100.0 * num_cpus::get() as f64),
+                Err(_) => 0.0,
+            }
+        },
+        Err(_) => 0.0,
+    }
+}
+
 /// Get the total CPU usage percentage of the process and its children
 /// If parent_process is provided, it will be used instead of creating a new one
 pub fn get_process_cpu_usage_with_children_from_process(parent_process: &unix::NativeProcess, pid: i64) -> f64 {
@@ -776,6 +793,18 @@ pub fn get_process_cpu_usage_with_children_from_process(parent_process: &unix::N
     
     let children_cpu: f64 = children.iter()
         .map(|&child_pid| get_process_cpu_usage_percentage(child_pid))
+        .sum();
+    
+    (parent_cpu + children_cpu).min(100.0 * num_cpus::get() as f64)
+}
+
+/// Get the total CPU usage percentage of the process and its children (fast version)
+pub fn get_process_cpu_usage_with_children_fast(pid: i64) -> f64 {
+    let parent_cpu = get_process_cpu_usage_percentage_fast(pid);
+    let children = process_find_children(pid);
+    
+    let children_cpu: f64 = children.iter()
+        .map(|&child_pid| get_process_cpu_usage_percentage_fast(child_pid))
         .sum();
     
     (parent_cpu + children_cpu).min(100.0 * num_cpus::get() as f64)
@@ -795,7 +824,7 @@ pub fn get_process_cpu_usage_with_children(pid: i64) -> f64 {
 
 /// Get the total memory usage of the process and its children
 pub fn get_process_memory_with_children(pid: i64) -> Option<MemoryInfo> {
-    let parent_memory = unix::NativeProcess::new(pid as u32)
+    let parent_memory = unix::NativeProcess::new_fast(pid as u32)
         .ok()?
         .memory_info()
         .ok()
@@ -805,7 +834,7 @@ pub fn get_process_memory_with_children(pid: i64) -> Option<MemoryInfo> {
     
     let children_memory: (u64, u64) = children.iter()
         .filter_map(|&child_pid| {
-            unix::NativeProcess::new(child_pid as u32)
+            unix::NativeProcess::new_fast(child_pid as u32)
                 .ok()
                 .and_then(|p| p.memory_info().ok())
                 .map(|m| (m.rss(), m.vms()))

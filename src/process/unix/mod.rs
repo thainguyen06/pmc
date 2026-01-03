@@ -7,7 +7,7 @@ pub mod memory;
 pub mod process_info;
 pub mod process_list;
 
-pub use cpu::get_cpu_percent;
+pub use cpu::{get_cpu_percent, get_cpu_percent_fast};
 pub use env::{env, Vars};
 pub use memory::{get_memory_info, NativeMemoryInfo};
 pub use process_info::{get_parent_pid, get_process_name, get_process_start_time};
@@ -31,6 +31,26 @@ impl NativeProcess {
         let name = get_process_name(pid)?;
         let memory_info = get_memory_info(pid).ok();
         let cpu_percent = get_cpu_percent(pid);
+        let create_time = get_process_start_time(pid)?;
+        
+        Ok(NativeProcess {
+            pid,
+            ppid,
+            name,
+            memory_info,
+            cpu_percent,
+            create_time,
+        })
+    }
+    
+    /// Create a new NativeProcess using fast CPU calculation.
+    /// This is much faster as it doesn't require delay-based sampling,
+    /// but returns average CPU usage since process start instead of current usage.
+    pub fn new_fast(pid: u32) -> Result<Self, String> {
+        let ppid = get_parent_pid(pid as i32)?.map(|p| p as u32);
+        let name = get_process_name(pid)?;
+        let memory_info = get_memory_info(pid).ok();
+        let cpu_percent = get_cpu_percent_fast(pid);
         let create_time = get_process_start_time(pid)?;
         
         Ok(NativeProcess {
