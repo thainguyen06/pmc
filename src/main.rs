@@ -8,7 +8,7 @@ use macros_rs::{str, string, then};
 use update_informer::{registry, Check};
 
 use crate::{
-    cli::{internal::Internal, Args, Item},
+    cli::{internal::Internal, Args, Item, Items},
     globals::defaults,
 };
 
@@ -86,8 +86,8 @@ enum Commands {
     /// Stop/Kill a process
     #[command(visible_alias = "kill")]
     Stop {
-        #[clap(value_parser = cli::validate::<Item>)]
-        item: Item,
+        #[clap(value_parser = cli::validate_items)]
+        items: Items,
         /// Server
         #[arg(short, long)]
         server: Option<String>,
@@ -95,8 +95,8 @@ enum Commands {
     /// Stop then remove a process
     #[command(visible_alias = "rm", visible_alias = "delete")]
     Remove {
-        #[clap(value_parser = cli::validate::<Item>)]
-        item: Item,
+        #[clap(value_parser = cli::validate_items)]
+        items: Items,
         /// Server
         #[arg(short, long)]
         server: Option<String>,
@@ -186,8 +186,8 @@ enum Commands {
 
     /// Restart a process
     Restart {
-        #[clap(value_parser = cli::validate::<Item>)]
-        item: Item,
+        #[clap(value_parser = cli::validate_items)]
+        items: Items,
         /// Server
         #[arg(short, long)]
         server: Option<String>,
@@ -211,8 +211,8 @@ fn main() {
         Commands::Import { path } => cli::import::read_hcl(path),
         Commands::Export { item, path } => cli::import::export_hcl(item, path),
         Commands::Start { name, args, watch, server, reset_env } => cli::start(name, args, watch, reset_env, &defaults(server)),
-        Commands::Stop { item, server } => cli::stop(item, &defaults(server)),
-        Commands::Remove { item, server } => cli::remove(item, &defaults(server)),
+        Commands::Stop { items, server } => cli::stop(items, &defaults(server)),
+        Commands::Remove { items, server } => cli::remove(items, &defaults(server)),
         Commands::Restore { server } => Internal::restore(&defaults(server)),
         Commands::Save { server } => Internal::save(&defaults(server)),
         Commands::Env { item, server } => cli::env(item, &defaults(server)),
@@ -230,7 +230,7 @@ fn main() {
             Daemon::Restore => daemon::restart(level.as_str() != "OFF"),
         },
 
-        Commands::Restart { item, server } => cli::restart(item, &defaults(server)),
+        Commands::Restart { items, server } => cli::restart(items, &defaults(server)),
     };
 
     if !matches!(&cli.command, Commands::Daemon { .. })
