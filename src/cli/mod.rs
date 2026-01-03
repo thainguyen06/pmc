@@ -4,7 +4,7 @@ pub use args::*;
 pub(crate) mod import;
 pub(crate) mod internal;
 
-use internal::Internal;
+use internal::{Internal, STATS_PRE_LIST_DELAY_MS};
 use macros_rs::{crashln, string, ternary};
 use opm::{helpers, process::Runner};
 use std::env;
@@ -68,7 +68,7 @@ pub fn start(name: &Option<String>, args: &Args, watch: &Option<String>, reset_e
     }
 
     // Allow CPU stats to accumulate before displaying the list
-    thread::sleep(Duration::from_millis(100));
+    thread::sleep(Duration::from_millis(STATS_PRE_LIST_DELAY_MS));
     Internal::list(&string!("default"), &list_name);
 }
 
@@ -258,6 +258,6 @@ pub fn restart(items: &Items, server_name: &String) {
     }
 
     // Allow CPU stats to accumulate before displaying the list
-    thread::sleep(Duration::from_millis(100));
+    thread::sleep(Duration::from_millis(STATS_PRE_LIST_DELAY_MS));
     Internal::list(&string!("default"), &list_name);
 }

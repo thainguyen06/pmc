@@ -32,6 +32,11 @@ lazy_static! {
     static ref SIMPLE_PATH_PATTERN: Regex = Regex::new(r"^[a-zA-Z0-9]+(/[a-zA-Z0-9]+)*$").unwrap();
 }
 
+// Constants for real-time statistics display timing
+const STATS_INITIAL_DELAY_MS: u64 = 150;
+const STATS_SECOND_DELAY_MS: u64 = 200;
+pub(crate) const STATS_PRE_LIST_DELAY_MS: u64 = 100;
+
 pub struct Internal<'i> {
     pub id: usize,
     pub runner: Runner,
@@ -66,17 +71,18 @@ impl<'i> Internal<'i> {
     fn show_initialization_stats(runner: &mut Runner, process_id: usize) {
         let process = runner.process(process_id);
         let pid = process.pid;
-        let process_name = process.name.clone();
+        // Borrow the name instead of cloning
+        let process_name = &process.name;
         
         // Wait a moment for process to initialize
-        thread::sleep(Duration::from_millis(150));
+        thread::sleep(Duration::from_millis(STATS_INITIAL_DELAY_MS));
         
         // Display initial statistics
-        Self::display_realtime_stats(pid, &process_name);
+        Self::display_realtime_stats(pid, process_name);
         
         // Display again after a short delay to show activity
-        thread::sleep(Duration::from_millis(200));
-        Self::display_realtime_stats(pid, &process_name);
+        thread::sleep(Duration::from_millis(STATS_SECOND_DELAY_MS));
+        Self::display_realtime_stats(pid, process_name);
     }
 
     pub fn create(mut self, script: &String, name: &Option<String>, watch: &Option<String>, silent: bool) -> Runner {
