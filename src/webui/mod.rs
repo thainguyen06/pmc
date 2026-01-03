@@ -1,4 +1,4 @@
-use pmc::config;
+use opm::config;
 use tera::Tera;
 
 pub fn create_templates() -> (Tera, String) {
