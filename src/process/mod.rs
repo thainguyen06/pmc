@@ -11,7 +11,7 @@ use crate::{
 };
 
 use std::{
-    collections::HashSet, env, fs::File, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration,
+    collections::{BTreeMap, HashSet}, env, fs::File, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration,
 };
 
 use nix::{
@@ -24,7 +24,6 @@ use chrono::{DateTime, Utc};
 use global_placeholders::global;
 use macros_rs::{crashln, string, ternary, then};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -306,15 +305,16 @@ impl Runner {
 
             // Load environment variables from .env file
             let dotenv_vars = load_dotenv(&path);
+            let system_env = unix::env();
             
             // Prepare process environment with dotenv variables having priority
-            let mut process_env = Vec::with_capacity(dotenv_vars.len() + unix::env().len());
+            let mut process_env = Vec::with_capacity(dotenv_vars.len() + system_env.len());
             // Add dotenv variables first (higher priority)
             for (key, value) in &dotenv_vars {
                 process_env.push(format!("{}={}", key, value));
             }
             // Then add system environment
-            process_env.extend(unix::env());
+            process_env.extend(system_env);
 
             let pid = process_run(ProcessMetadata {
                 args: config.args,
@@ -373,10 +373,11 @@ impl Runner {
             } else {
                 // Load environment variables from .env file
                 let dotenv_vars = load_dotenv(&path);
+                let system_env = unix::env();
                 
                 // Prepare process environment with dotenv variables having priority
                 let stored_env_vec: Vec<String> = process.env.iter().map(|(key, value)| format!("{}={}", key, value)).collect();
-                let mut temp_env = Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + unix::env().len());
+                let mut temp_env = Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
                 // Add dotenv variables first (highest priority)
                 for (key, value) in &dotenv_vars {
                     temp_env.push(format!("{}={}", key, value));
@@ -384,7 +385,7 @@ impl Runner {
                 // Then add stored environment
                 temp_env.extend(stored_env_vec);
                 // Finally add system environment
-                temp_env.extend(unix::env());
+                temp_env.extend(system_env);
 
                 process.pid = process_run(ProcessMetadata {
                     args: config.args,
