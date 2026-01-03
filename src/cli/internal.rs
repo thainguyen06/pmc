@@ -12,7 +12,7 @@ use opm::{
     config, file,
     helpers::{self, ColoredString},
     log,
-    process::{http, ItemSingle, Runner, get_process_cpu_usage_with_children, get_process_memory_with_children},
+    process::{http, ItemSingle, Runner, get_process_cpu_usage_with_children, get_process_cpu_usage_with_children_from_process, get_process_memory_with_children},
 };
 
 use tabled::{
@@ -310,9 +310,9 @@ impl<'i> Internal<'i> {
                 let path = file::make_relative(&item.path, &home).to_string_lossy().into_owned();
                 let children = if item.children.is_empty() { "none".to_string() } else { format!("{:?}", item.children) };
 
-                if let Ok(_process) = Process::new(item.pid as u32) {
+                if let Ok(process) = Process::new(item.pid as u32) {
                     memory_usage = get_process_memory_with_children(item.pid as i64);
-                    cpu_percent = Some(get_process_cpu_usage_with_children(item.pid as i64));
+                    cpu_percent = Some(get_process_cpu_usage_with_children_from_process(&process, item.pid as i64));
                 }
 
                 let cpu_percent = match cpu_percent {
@@ -621,9 +621,9 @@ impl<'i> Internal<'i> {
                     if internal {
                         let mut usage_internals: (Option<f64>, Option<MemoryInfo>) = (None, None);
 
-                        if let Ok(_process) = Process::new(item.pid as u32) {
+                        if let Ok(process) = Process::new(item.pid as u32) {
                             usage_internals = (
-                                Some(get_process_cpu_usage_with_children(item.pid as i64)),
+                                Some(get_process_cpu_usage_with_children_from_process(&process, item.pid as i64)),
                                 get_process_memory_with_children(item.pid as i64)
                             );
                         }
