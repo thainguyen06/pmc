@@ -30,7 +30,7 @@ use tabled::{
 
 lazy_static! {
     static ref SCRIPT_EXTENSION_PATTERN: Regex =
-        Regex::new(r"^[^\s]+\.(js|ts|py|sh|rb|pl|php)(\s|$)").unwrap();
+        Regex::new(r"^[^\s]+\.(js|ts|mjs|cjs|py|py3|pyw|sh|bash|zsh|rb|pl|php|lua|r|R|go|java|kt|kts|scala|groovy|swift)(\s|$)").unwrap();
     static ref SIMPLE_PATH_PATTERN: Regex = Regex::new(r"^[a-zA-Z0-9]+(/[a-zA-Z0-9]+)*$").unwrap();
 }
 
