@@ -52,12 +52,13 @@ fn restart_process() {
                 if memory_info.rss > item.max_memory {
                     log!("[daemon] memory limit exceeded", "name" => item.name, "id" => id, 
                          "memory" => memory_info.rss, "limit" => item.max_memory);
-                    runner.stop(item.id);
-                    runner.set_crashed(*id).save();
-                    println!("{} Process ({}) exceeded memory limit: {} > {}", 
+                    println!("{} Process ({}) exceeded memory limit: {} > {} - stopping process", 
                              *helpers::FAIL, item.name, 
                              helpers::format_memory(memory_info.rss),
                              helpers::format_memory(item.max_memory));
+                    runner.stop(item.id);
+                    // Don't mark as crashed since this is intentional enforcement
+                    runner.save();
                     continue;
                 }
             }

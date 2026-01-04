@@ -52,10 +52,7 @@ impl<'i> Internal<'i> {
         let max_memory_bytes = match max_memory {
             Some(mem_str) => match helpers::parse_memory(mem_str) {
                 Ok(bytes) => bytes,
-                Err(err) => {
-                    println!("{} {}", *helpers::FAIL, err);
-                    0
-                }
+                Err(err) => crashln!("{} {}", *helpers::FAIL, err),
             },
             None => 0,
         };

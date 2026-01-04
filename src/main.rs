@@ -196,7 +196,7 @@ enum Commands {
         server: Option<String>,
     },
 
-    /// Reload a process (graceful restart, alias for restart)
+    /// Reload a process (same as restart - stops and starts the process)
     Reload {
         #[clap(value_parser = cli::validate_items)]
         items: Items,
