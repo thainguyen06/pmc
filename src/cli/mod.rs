@@ -170,25 +170,45 @@ pub fn remove(items: &Items, server_name: &String) {
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
-    for item in &items.items {
-        match item {
-            Item::Id(id) => Internal {
-                id: *id,
-                runner: runner.clone(),
-                server_name,
-                kind: kind.clone(),
+    if items.is_all() {
+        println!("{} Applying {kind}action removeAllProcess", *helpers::SUCCESS);
+
+        let largest = runner.size();
+        match largest {
+            Some(largest) => {
+                (0..*largest + 1).for_each(|id| {
+                    Internal {
+                        id,
+                        runner: runner.clone(),
+                        server_name,
+                        kind: kind.clone(),
+                    }
+                    .remove();
+                });
             }
-            .remove(),
-            Item::Name(name) => match runner.find(&name, server_name) {
-                Some(id) => Internal {
-                    id,
+            None => println!("{} Cannot remove all, no processes found", *helpers::FAIL),
+        }
+    } else {
+        for item in &items.items {
+            match item {
+                Item::Id(id) => Internal {
+                    id: *id,
                     runner: runner.clone(),
                     server_name,
                     kind: kind.clone(),
                 }
                 .remove(),
-                None => crashln!("{} Process ({name}) not found", *helpers::FAIL),
-            },
+                Item::Name(name) => match runner.find(&name, server_name) {
+                    Some(id) => Internal {
+                        id,
+                        runner: runner.clone(),
+                        server_name,
+                        kind: kind.clone(),
+                    }
+                    .remove(),
+                    None => crashln!("{} Process ({name}) not found", *helpers::FAIL),
+                },
+            }
         }
     }
 
