@@ -80,13 +80,6 @@ fn restart_process() {
             }
         }
 
-        // Check if process is marked as running but not actually running
-        if item.running && !pid::running(item.pid as i32) {
-            Runner::new().set_status(*id, Status::Offline);
-            log!("[daemon] process fix status", "name" => item.name, "id" => id);
-            continue;
-        }
-
         // Skip if process is not running or is actually still running
         then!(!item.running || pid::running(item.pid as i32), continue);
 
