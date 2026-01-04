@@ -24,4 +24,9 @@ pub mod process;
 // }
 
 // Re-export Rust implementations outside of cxx bridge
-pub use process::{get_process_cpu_usage_percentage, get_process_cpu_usage_percentage_fast, get_process_cpu_usage_with_children, get_process_cpu_usage_with_children_fast, get_process_cpu_usage_with_children_from_process, get_process_memory_with_children, process_stop, process_find_children, process_run};
+pub use process::{
+    get_process_cpu_usage_percentage, get_process_cpu_usage_percentage_fast,
+    get_process_cpu_usage_with_children, get_process_cpu_usage_with_children_fast,
+    get_process_cpu_usage_with_children_from_process, get_process_memory_with_children,
+    process_find_children, process_run, process_stop,
+};

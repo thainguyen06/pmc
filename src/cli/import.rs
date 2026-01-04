@@ -37,7 +37,9 @@ struct Watch {
 }
 
 impl Process {
-    fn get_watch_path(&self) -> Option<String> { self.watch.as_ref().and_then(|w| Some(w.path.clone())) }
+    fn get_watch_path(&self) -> Option<String> {
+        self.watch.as_ref().and_then(|w| Some(w.path.clone()))
+    }
 }
 
 pub fn read_hcl(path: &String) {
@@ -47,12 +49,20 @@ pub fn read_hcl(path: &String) {
 
     let contents = match fs::read_to_string(path) {
         Ok(contents) => contents,
-        Err(err) => crashln!("{} Cannot read file to import.\n{}", *helpers::FAIL, string!(err).white()),
+        Err(err) => crashln!(
+            "{} Cannot read file to import.\n{}",
+            *helpers::FAIL,
+            string!(err).white()
+        ),
     };
 
     let hcl_parsed: ProcessWrapper = match hcl::from_str(&contents) {
         Ok(hcl) => hcl,
-        Err(err) => crashln!("{} Cannot parse imported file.\n{}", *helpers::FAIL, string!(err).white()),
+        Err(err) => crashln!(
+            "{} Cannot parse imported file.\n{}",
+            *helpers::FAIL,
+            string!(err).white()
+        ),
     };
 
     for (name, item) in hcl_parsed.list {
@@ -66,7 +76,13 @@ pub fn read_hcl(path: &String) {
             kind: kind.clone(),
             runner: runner.clone(),
         }
-        .create(&item.script, &Some(name.clone()), &item.get_watch_path(), &item.max_memory, true);
+        .create(
+            &item.script,
+            &Some(name.clone()),
+            &item.get_watch_path(),
+            &item.max_memory,
+            true,
+        );
 
         println!("{} Imported {kind}process {name}", *helpers::SUCCESS);
 
@@ -85,8 +101,13 @@ pub fn read_hcl(path: &String) {
         }
     }
 
-    servers.iter().for_each(|server| super::Internal::list(&string!("default"), &server));
-    println!("{} Applied startProcess to imported items", *helpers::SUCCESS);
+    servers
+        .iter()
+        .for_each(|server| super::Internal::list(&string!("default"), &server));
+    println!(
+        "{} Applied startProcess to imported items",
+        *helpers::SUCCESS
+    );
 }
 
 pub fn export_hcl(items: &Items, path: &Option<String>) {
@@ -101,7 +122,7 @@ pub fn export_hcl(items: &Items, path: &Option<String>) {
         for id in runner.list.keys() {
             process_ids.push(*id);
         }
-        
+
         if process_ids.is_empty() {
             crashln!("{} No processes found to export", *helpers::FAIL);
         }
@@ -130,8 +151,16 @@ pub fn export_hcl(items: &Items, path: &Option<String>) {
 
     // Check if file already exists and clear it
     if Exists::check(&output_path).file() {
-        if let Err(err) = fs::write(&output_path, "") {
-            crashln!("{} Error clearing existing file.\n{}", *helpers::FAIL, string!(err).white())
+        if let Err(err) = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&output_path)
+        {
+            crashln!(
+                "{} Error clearing existing file.\n{}",
+                *helpers::FAIL,
+                string!(err).white()
+            )
         }
     }
 
@@ -145,7 +174,9 @@ pub fn export_hcl(items: &Items, path: &Option<String>) {
         let current_env: HashMap<String, String> = std::env::vars().collect();
 
         if process.watch.enabled {
-            watch_parsed = Some(Watch { path: process.watch.path.clone() })
+            watch_parsed = Some(Watch {
+                path: process.watch.path.clone(),
+            })
         }
 
         for (key, value) in process.env.clone() {
@@ -177,17 +208,29 @@ pub fn export_hcl(items: &Items, path: &Option<String>) {
         let serialized = hcl::to_string(&data).unwrap();
 
         // Append to file
-        let mut file = OpenOptions::new()
+        let mut file = match OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
             .open(&output_path)
-            .unwrap();
-            
+        {
+            Ok(f) => f,
+            Err(err) => crashln!("{} Error opening file.\n{}", *helpers::FAIL, string!(err).white()),
+        };
+
         if let Err(err) = writeln!(file, "{}", serialized) {
-            crashln!("{} Error writing to file.\n{}", *helpers::FAIL, string!(err).white())
+            crashln!(
+                "{} Error writing to file.\n{}",
+                *helpers::FAIL,
+                string!(err).white()
+            )
         }
     }
 
-    println!("{} Exported {} process(es) to {}", *helpers::SUCCESS, count, output_path);
+    println!(
+        "{} Exported {} process(es) to {}",
+        *helpers::SUCCESS,
+        count,
+        output_path
+    );
 }

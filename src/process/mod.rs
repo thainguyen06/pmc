@@ -4,18 +4,20 @@ pub mod http;
 pub mod id;
 pub mod unix;
 
-use crate::{
-    config,
-    config::structs::Server,
-    file, helpers,
-};
+use crate::{config, config::structs::Server, file, helpers};
 
 use std::{
-    collections::{BTreeMap, HashSet}, env, fs::File, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration,
+    collections::{BTreeMap, HashSet},
+    env,
+    fs::File,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
 };
 
 use nix::{
-    sys::signal::{kill, Signal},
+    sys::signal::{Signal, kill},
     unistd::Pid,
 };
 
@@ -217,10 +219,10 @@ macro_rules! lock {
 fn kill_children(children: Vec<i64>) {
     for pid in children {
         match kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(nix::errno::Errno::ESRCH) => {
                 // Process already terminated
-            },
+            }
             Err(err) => {
                 log::error!("Failed to stop pid {}: {err:?}", pid);
             }
@@ -232,7 +234,7 @@ fn kill_children(children: Vec<i64>) {
 fn load_dotenv(path: &PathBuf) -> BTreeMap<String, String> {
     let env_file = path.join(".env");
     let mut env_vars = BTreeMap::new();
-    
+
     if env_file.exists() && env_file.is_file() {
         match dotenvy::from_path_iter(&env_file) {
             Ok(iter) => {
@@ -247,7 +249,10 @@ fn load_dotenv(path: &PathBuf) -> BTreeMap<String, String> {
                     }
                 }
                 if !env_vars.is_empty() {
-                    log::info!("Loaded {} environment variables from .env file", env_vars.len());
+                    log::info!(
+                        "Loaded {} environment variables from .env file",
+                        env_vars.len()
+                    );
                 }
             }
             Err(err) => {
@@ -255,14 +260,18 @@ fn load_dotenv(path: &PathBuf) -> BTreeMap<String, String> {
             }
         }
     }
-    
+
     env_vars
 }
 
 impl Runner {
-    pub fn new() -> Self { dump::read() }
+    pub fn new() -> Self {
+        dump::read()
+    }
 
-    pub fn refresh(&self) -> Self { Runner::new() }
+    pub fn refresh(&self) -> Self {
+        Runner::new()
+    }
 
     pub fn connect(name: String, Server { address, token }: Server, verbose: bool) -> Option<Self> {
         let remote_config = match config::from(&address, token.as_deref()) {
@@ -274,7 +283,13 @@ impl Runner {
         };
 
         if let Ok(dump) = dump::from(&address, token.as_deref()) {
-            then!(verbose, println!("{} Fetched remote (name={name}, address={address})", *helpers::SUCCESS));
+            then!(
+                verbose,
+                println!(
+                    "{} Fetched remote (name={name}, address={address})",
+                    *helpers::SUCCESS
+                )
+            );
             Some(Runner {
                 remote: Some(Remote {
                     token,
@@ -288,15 +303,29 @@ impl Runner {
         }
     }
 
-    pub fn start(&mut self, name: &String, command: &String, path: PathBuf, watch: &Option<String>, max_memory: u64) -> &mut Self {
+    pub fn start(
+        &mut self,
+        name: &String,
+        command: &String,
+        path: PathBuf,
+        watch: &Option<String>,
+        max_memory: u64,
+    ) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::create(remote, name, command, path, watch) {
-                crashln!("{} Failed to start create {name}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to start create {name}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             let id = self.id.next();
             let config = config::read().runner;
-            let crash = Crash { crashed: false, value: 0 };
+            let crash = Crash {
+                crashed: false,
+                value: 0,
+            };
 
             let watch = match watch {
                 Some(watch) => Watch {
@@ -314,7 +343,7 @@ impl Runner {
             // Load environment variables from .env file
             let dotenv_vars = load_dotenv(&path);
             let system_env = unix::env();
-            
+
             // Prepare process environment with dotenv variables having priority
             let mut process_env = Vec::with_capacity(dotenv_vars.len() + system_env.len());
             // Add dotenv variables first (higher priority)
@@ -331,7 +360,8 @@ impl Runner {
                 command: command.clone(),
                 log_path: config.log_path,
                 env: process_env,
-            }).unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
+            })
+            .unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
 
             // Merge .env variables into the stored environment (dotenv takes priority)
             let mut stored_env: Env = env::vars().collect();
@@ -365,29 +395,46 @@ impl Runner {
     pub fn restart(&mut self, id: usize, dead: bool) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::restart(remote, id) {
-                crashln!("{} Failed to start process {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to start process {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             let process = self.process(id);
             let config = config::read().runner;
-            let Process { path, script, name, .. } = process.clone();
+            let Process {
+                path, script, name, ..
+            } = process.clone();
 
             kill_children(process.children.clone());
-            process_stop(process.pid).unwrap_or_else(|err| crashln!("Failed to stop process: {err}"));
+            process_stop(process.pid)
+                .unwrap_or_else(|err| crashln!("Failed to stop process: {err}"));
 
             if let Err(err) = std::env::set_current_dir(&path) {
                 process.running = false;
                 process.children = vec![];
                 process.crash.crashed = true;
-                println!("{} Failed to set working directory {:?}\nError: {:#?}", *helpers::FAIL, path, err);
+                println!(
+                    "{} Failed to set working directory {:?}\nError: {:#?}",
+                    *helpers::FAIL,
+                    path,
+                    err
+                );
             } else {
                 // Load environment variables from .env file
                 let dotenv_vars = load_dotenv(&path);
                 let system_env = unix::env();
-                
+
                 // Prepare process environment with dotenv variables having priority
-                let stored_env_vec: Vec<String> = process.env.iter().map(|(key, value)| format!("{}={}", key, value)).collect();
-                let mut temp_env = Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
+                let stored_env_vec: Vec<String> = process
+                    .env
+                    .iter()
+                    .map(|(key, value)| format!("{}={}", key, value))
+                    .collect();
+                let mut temp_env =
+                    Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
                 // Add dotenv variables first (highest priority)
                 for (key, value) in &dotenv_vars {
                     temp_env.push(format!("{}={}", key, value));
@@ -404,7 +451,8 @@ impl Runner {
                     log_path: config.log_path,
                     command: script.to_string(),
                     env: temp_env,
-                }).unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
+                })
+                .unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
 
                 process.pid = result.pid;
                 process.shell_pid = result.shell_pid;
@@ -412,7 +460,7 @@ impl Runner {
                 process.children = vec![];
                 process.started = Utc::now();
                 process.crash.crashed = false;
-                
+
                 // Merge .env variables into the stored environment (dotenv takes priority)
                 let mut updated_env: Env = env::vars().collect();
                 updated_env.extend(dotenv_vars);
@@ -430,26 +478,47 @@ impl Runner {
     pub fn reload(&mut self, id: usize, dead: bool) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::reload(remote, id) {
-                crashln!("{} Failed to reload process {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to reload process {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             let process = self.process(id);
             let config = config::read().runner;
-            let Process { path, script, name, env, watch: _, max_memory: _, .. } = process.clone();
+            let Process {
+                path,
+                script,
+                name,
+                env,
+                watch: _,
+                max_memory: _,
+                ..
+            } = process.clone();
 
             if let Err(err) = std::env::set_current_dir(&path) {
                 process.running = false;
                 process.children = vec![];
                 process.crash.crashed = true;
-                println!("{} Failed to set working directory {:?}\nError: {:#?}", *helpers::FAIL, path, err);
+                println!(
+                    "{} Failed to set working directory {:?}\nError: {:#?}",
+                    *helpers::FAIL,
+                    path,
+                    err
+                );
             } else {
                 // Load environment variables from .env file
                 let dotenv_vars = load_dotenv(&path);
                 let system_env = unix::env();
-                
+
                 // Prepare process environment with dotenv variables having priority
-                let stored_env_vec: Vec<String> = env.iter().map(|(key, value)| format!("{}={}", key, value)).collect();
-                let mut temp_env = Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
+                let stored_env_vec: Vec<String> = env
+                    .iter()
+                    .map(|(key, value)| format!("{}={}", key, value))
+                    .collect();
+                let mut temp_env =
+                    Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
                 // Add dotenv variables first (highest priority)
                 for (key, value) in &dotenv_vars {
                     temp_env.push(format!("{}={}", key, value));
@@ -467,7 +536,8 @@ impl Runner {
                     log_path: config.log_path,
                     command: script.to_string(),
                     env: temp_env,
-                }).unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
+                })
+                .unwrap_or_else(|err| crashln!("Failed to run process: {err}"));
 
                 // Store old PID before updating
                 let old_pid = process.pid;
@@ -480,7 +550,7 @@ impl Runner {
                 process.children = vec![];
                 process.started = Utc::now();
                 process.crash.crashed = false;
-                
+
                 // Merge .env variables into the stored environment (dotenv takes priority)
                 let mut updated_env: Env = env::vars().collect();
                 updated_env.extend(dotenv_vars);
@@ -504,7 +574,11 @@ impl Runner {
     pub fn remove(&mut self, id: usize) {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::remove(remote, id) {
-                crashln!("{} Failed to stop remove {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to stop remove {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             self.stop(id);
@@ -524,29 +598,60 @@ impl Runner {
         self.save();
     }
 
-    pub fn items(&self) -> BTreeMap<usize, Process> { self.list.clone() }
+    pub fn items(&self) -> BTreeMap<usize, Process> {
+        self.list.clone()
+    }
 
-    pub fn items_mut(&mut self) -> &mut BTreeMap<usize, Process> { &mut self.list }
+    pub fn items_mut(&mut self) -> &mut BTreeMap<usize, Process> {
+        &mut self.list
+    }
 
-    pub fn save(&self) { then!(self.remote.is_none(), dump::write(&self)) }
+    pub fn save(&self) {
+        then!(self.remote.is_none(), dump::write(&self))
+    }
 
-    pub fn count(&mut self) -> usize { self.list().count() }
+    pub fn count(&mut self) -> usize {
+        self.list().count()
+    }
 
-    pub fn is_empty(&self) -> bool { self.list.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
 
-    pub fn exists(&self, id: usize) -> bool { self.list.contains_key(&id) }
+    pub fn exists(&self, id: usize) -> bool {
+        self.list.contains_key(&id)
+    }
 
-    pub fn info(&self, id: usize) -> Option<&Process> { self.list.get(&id) }
+    pub fn info(&self, id: usize) -> Option<&Process> {
+        self.list.get(&id)
+    }
 
-    pub fn try_info(&self, id: usize) -> &Process { self.list.get(&id).unwrap_or_else(|| crashln!("{} Process ({id}) not found", *helpers::FAIL)) }
+    pub fn try_info(&self, id: usize) -> &Process {
+        self.list
+            .get(&id)
+            .unwrap_or_else(|| crashln!("{} Process ({id}) not found", *helpers::FAIL))
+    }
 
-    pub fn size(&self) -> Option<&usize> { self.list.iter().map(|(k, _)| k).max() }
+    pub fn size(&self) -> Option<&usize> {
+        self.list.iter().map(|(k, _)| k).max()
+    }
 
-    pub fn list<'l>(&'l mut self) -> impl Iterator<Item = (&'l usize, &'l mut Process)> { self.list.iter_mut().map(|(k, v)| (k, v)) }
+    pub fn list<'l>(&'l mut self) -> impl Iterator<Item = (&'l usize, &'l mut Process)> {
+        self.list.iter_mut().map(|(k, v)| (k, v))
+    }
 
-    pub fn process(&mut self, id: usize) -> &mut Process { self.list.get_mut(&id).unwrap_or_else(|| crashln!("{} Process ({id}) not found", *helpers::FAIL)) }
+    pub fn process(&mut self, id: usize) -> &mut Process {
+        self.list
+            .get_mut(&id)
+            .unwrap_or_else(|| crashln!("{} Process ({id}) not found", *helpers::FAIL))
+    }
 
-    pub fn pid(&self, id: usize) -> i64 { self.list.get(&id).unwrap_or_else(|| crashln!("{} Process ({id}) not found", *helpers::FAIL)).pid }
+    pub fn pid(&self, id: usize) -> i64 {
+        self.list
+            .get(&id)
+            .unwrap_or_else(|| crashln!("{} Process ({id}) not found", *helpers::FAIL))
+            .pid
+    }
 
     pub fn get(self, id: usize) -> ProcessWrapper {
         ProcessWrapper {
@@ -568,7 +673,11 @@ impl Runner {
     pub fn clear_env(&mut self, id: usize) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::clear_env(remote, id) {
-                crashln!("{} Failed to clear environment on {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to clear environment on {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             self.process(id).env = BTreeMap::new();
@@ -590,7 +699,11 @@ impl Runner {
     pub fn stop(&mut self, id: usize) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::stop(remote, id) {
-                crashln!("{} Failed to stop process {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to stop process {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             let process_to_stop = self.process(id);
@@ -620,7 +733,11 @@ impl Runner {
     pub fn flush(&mut self, id: usize) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::flush(remote, id) {
-                crashln!("{} Failed to flush process {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to flush process {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             self.process(id).logs().flush();
@@ -632,7 +749,11 @@ impl Runner {
     pub fn rename(&mut self, id: usize, name: String) -> &mut Self {
         if let Some(remote) = &self.remote {
             if let Err(err) = http::rename(remote, id, name) {
-                crashln!("{} Failed to rename process {id}\nError: {:#?}", *helpers::FAIL, err);
+                crashln!(
+                    "{} Failed to rename process {id}\nError: {:#?}",
+                    *helpers::FAIL,
+                    err
+                );
             };
         } else {
             self.process(id).name = name;
@@ -671,14 +792,22 @@ impl Runner {
             if let Some(server) = servers.get(server_name) {
                 runner = match Runner::connect(server_name.clone(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to connect (name={server_name}, address={})", *helpers::FAIL, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={server_name}, address={})",
+                        *helpers::FAIL,
+                        server.address
+                    ),
                 };
             } else {
                 crashln!("{} Server '{server_name}' does not exist", *helpers::FAIL)
             };
         }
 
-        runner.list.iter().find(|(_, p)| p.name == name).map(|(id, _)| *id)
+        runner
+            .list
+            .iter()
+            .find(|(_, p)| p.name == name)
+            .map(|(id, _)| *id)
     }
 
     pub fn fetch(&self) -> Vec<ProcessItem> {
@@ -691,12 +820,13 @@ impl Runner {
             // Use new_fast() to avoid CPU measurement delays for list view
             // This uses average CPU since process start instead of current instantaneous CPU
             // For accurate current CPU, use the info endpoint which measures over a 100ms window
-            
+
             // For shell scripts, use shell_pid to capture the entire process tree
             let pid_for_monitoring = item.shell_pid.unwrap_or(item.pid);
-            
-            if let Ok(process) = unix::NativeProcess::new_fast(pid_for_monitoring as u32) && 
-                let Ok(_mem_info_native) = process.memory_info() {
+
+            if let Ok(process) = unix::NativeProcess::new_fast(pid_for_monitoring as u32)
+                && let Ok(_mem_info_native) = process.memory_info()
+            {
                 // Use fast CPU calculation that includes children (important for .sh scripts)
                 cpu_percent = Some(get_process_cpu_usage_with_children_fast(pid_for_monitoring));
                 memory_usage = get_process_memory_with_children(pid_for_monitoring);
@@ -743,12 +873,20 @@ impl LogInfo {
     pub fn flush(&self) {
         if let Err(err) = File::create(&self.out) {
             log::error!("{err}");
-            crashln!("{} Failed to purge logs (path={})", *helpers::FAIL, self.error);
+            crashln!(
+                "{} Failed to purge logs (path={})",
+                *helpers::FAIL,
+                self.error
+            );
         }
 
         if let Err(err) = File::create(&self.error) {
             log::error!("{err}");
-            crashln!("{} Failed to purge logs (path={})", *helpers::FAIL, self.error);
+            crashln!(
+                "{} Failed to purge logs (path={})",
+                *helpers::FAIL,
+                self.error
+            );
         }
     }
 }
@@ -767,37 +905,59 @@ impl Process {
 
 impl ProcessWrapper {
     /// Stop the process item
-    pub fn stop(&mut self) { lock!(self.runner).stop(self.id).save(); }
+    pub fn stop(&mut self) {
+        lock!(self.runner).stop(self.id).save();
+    }
 
     /// Restart the process item
-    pub fn restart(&mut self) { lock!(self.runner).restart(self.id, false).save(); }
+    pub fn restart(&mut self) {
+        lock!(self.runner).restart(self.id, false).save();
+    }
 
     /// Reload the process item (zero-downtime: starts new process before stopping old one)
-    pub fn reload(&mut self) { lock!(self.runner).reload(self.id, false).save(); }
+    pub fn reload(&mut self) {
+        lock!(self.runner).reload(self.id, false).save();
+    }
 
     /// Rename the process item
-    pub fn rename(&mut self, name: String) { lock!(self.runner).rename(self.id, name).save(); }
+    pub fn rename(&mut self, name: String) {
+        lock!(self.runner).rename(self.id, name).save();
+    }
 
     /// Enable watching a path on the process item
-    pub fn watch(&mut self, path: &str) { lock!(self.runner).watch(self.id, path, true).save(); }
+    pub fn watch(&mut self, path: &str) {
+        lock!(self.runner).watch(self.id, path, true).save();
+    }
 
     /// Disable watching on the process item
-    pub fn disable_watch(&mut self) { lock!(self.runner).watch(self.id, "", false).save(); }
+    pub fn disable_watch(&mut self) {
+        lock!(self.runner).watch(self.id, "", false).save();
+    }
 
     /// Set the process item as crashed
-    pub fn crashed(&mut self) { lock!(self.runner).restart(self.id, true).save(); }
+    pub fn crashed(&mut self) {
+        lock!(self.runner).restart(self.id, true).save();
+    }
 
     /// Get the borrowed runner reference (lives till program end)
-    pub fn get_runner(&mut self) -> &Runner { Box::leak(Box::new(lock!(self.runner))) }
+    pub fn get_runner(&mut self) -> &Runner {
+        Box::leak(Box::new(lock!(self.runner)))
+    }
 
     /// Append new environment values to the process item
-    pub fn set_env(&mut self, env: Env) { lock!(self.runner).set_env(self.id, env).save(); }
+    pub fn set_env(&mut self, env: Env) {
+        lock!(self.runner).set_env(self.id, env).save();
+    }
 
     /// Clear environment values of the process item
-    pub fn clear_env(&mut self) { lock!(self.runner).clear_env(self.id).save(); }
+    pub fn clear_env(&mut self) {
+        lock!(self.runner).clear_env(self.id).save();
+    }
 
     /// Reset restart and crash counters of the process item
-    pub fn reset_counters(&mut self) { lock!(self.runner).reset_counters(self.id).save(); }
+    pub fn reset_counters(&mut self) {
+        lock!(self.runner).reset_counters(self.id).save();
+    }
 
     /// Get a json dump of the process item
     pub fn fetch(&self) -> ItemSingle {
@@ -812,9 +972,13 @@ impl ProcessWrapper {
         // For shell scripts, use shell_pid to capture the entire process tree
         let pid_for_monitoring = item.shell_pid.unwrap_or(item.pid);
 
-        if let Ok(process) = unix::NativeProcess::new(pid_for_monitoring as u32) &&
-            let Ok(_mem_info_native) = process.memory_info() {
-            cpu_percent = Some(get_process_cpu_usage_with_children_from_process(&process, pid_for_monitoring));
+        if let Ok(process) = unix::NativeProcess::new(pid_for_monitoring as u32)
+            && let Ok(_mem_info_native) = process.memory_info()
+        {
+            cpu_percent = Some(get_process_cpu_usage_with_children_from_process(
+                &process,
+                pid_for_monitoring,
+            ));
             memory_usage = get_process_memory_with_children(pid_for_monitoring);
         }
 
@@ -836,7 +1000,12 @@ impl ProcessWrapper {
                 path: item.path.clone(),
                 children: item.children.clone(),
                 uptime: helpers::format_duration(item.started),
-                command: format!("{} {} '{}'", config.shell, config.args.join(" "), item.script.clone()),
+                command: format!(
+                    "{} {} '{}'",
+                    config.shell,
+                    config.args.join(" "),
+                    item.script.clone()
+                ),
             },
             stats: Stats {
                 cpu_percent,
@@ -865,11 +1034,9 @@ impl ProcessWrapper {
 /// Get the CPU usage percentage of the process
 pub fn get_process_cpu_usage_percentage(pid: i64) -> f64 {
     match unix::NativeProcess::new(pid as u32) {
-        Ok(process) => {
-            match process.cpu_percent() {
-                Ok(cpu_percent) => cpu_percent.min(100.0 * num_cpus::get() as f64),
-                Err(_) => 0.0,
-            }
+        Ok(process) => match process.cpu_percent() {
+            Ok(cpu_percent) => cpu_percent.min(100.0 * num_cpus::get() as f64),
+            Err(_) => 0.0,
         },
         Err(_) => 0.0,
     }
@@ -878,11 +1045,9 @@ pub fn get_process_cpu_usage_percentage(pid: i64) -> f64 {
 /// Get the CPU usage percentage of the process (fast version without delay)
 pub fn get_process_cpu_usage_percentage_fast(pid: i64) -> f64 {
     match unix::NativeProcess::new_fast(pid as u32) {
-        Ok(process) => {
-            match process.cpu_percent() {
-                Ok(cpu_percent) => cpu_percent.min(100.0 * num_cpus::get() as f64),
-                Err(_) => 0.0,
-            }
+        Ok(process) => match process.cpu_percent() {
+            Ok(cpu_percent) => cpu_percent.min(100.0 * num_cpus::get() as f64),
+            Err(_) => 0.0,
         },
         Err(_) => 0.0,
     }
@@ -890,18 +1055,22 @@ pub fn get_process_cpu_usage_percentage_fast(pid: i64) -> f64 {
 
 /// Get the total CPU usage percentage of the process and its children
 /// If parent_process is provided, it will be used instead of creating a new one
-pub fn get_process_cpu_usage_with_children_from_process(parent_process: &unix::NativeProcess, pid: i64) -> f64 {
+pub fn get_process_cpu_usage_with_children_from_process(
+    parent_process: &unix::NativeProcess,
+    pid: i64,
+) -> f64 {
     let parent_cpu = match parent_process.cpu_percent() {
         Ok(cpu_percent) => cpu_percent.min(100.0 * num_cpus::get() as f64),
         Err(_) => 0.0,
     };
-    
+
     let children = process_find_children(pid);
-    
-    let children_cpu: f64 = children.iter()
+
+    let children_cpu: f64 = children
+        .iter()
         .map(|&child_pid| get_process_cpu_usage_percentage(child_pid))
         .sum();
-    
+
     (parent_cpu + children_cpu).min(100.0 * num_cpus::get() as f64)
 }
 
@@ -909,11 +1078,12 @@ pub fn get_process_cpu_usage_with_children_from_process(parent_process: &unix::N
 pub fn get_process_cpu_usage_with_children_fast(pid: i64) -> f64 {
     let parent_cpu = get_process_cpu_usage_percentage_fast(pid);
     let children = process_find_children(pid);
-    
-    let children_cpu: f64 = children.iter()
+
+    let children_cpu: f64 = children
+        .iter()
         .map(|&child_pid| get_process_cpu_usage_percentage_fast(child_pid))
         .sum();
-    
+
     (parent_cpu + children_cpu).min(100.0 * num_cpus::get() as f64)
 }
 
@@ -921,11 +1091,12 @@ pub fn get_process_cpu_usage_with_children_fast(pid: i64) -> f64 {
 pub fn get_process_cpu_usage_with_children(pid: i64) -> f64 {
     let parent_cpu = get_process_cpu_usage_percentage(pid);
     let children = process_find_children(pid);
-    
-    let children_cpu: f64 = children.iter()
+
+    let children_cpu: f64 = children
+        .iter()
         .map(|&child_pid| get_process_cpu_usage_percentage(child_pid))
         .sum();
-    
+
     (parent_cpu + children_cpu).min(100.0 * num_cpus::get() as f64)
 }
 
@@ -936,10 +1107,11 @@ pub fn get_process_memory_with_children(pid: i64) -> Option<MemoryInfo> {
         .memory_info()
         .ok()
         .map(MemoryInfo::from)?;
-    
+
     let children = process_find_children(pid);
-    
-    let children_memory: (u64, u64) = children.iter()
+
+    let children_memory: (u64, u64) = children
+        .iter()
         .filter_map(|&child_pid| {
             unix::NativeProcess::new_fast(child_pid as u32)
                 .ok()
@@ -949,7 +1121,7 @@ pub fn get_process_memory_with_children(pid: i64) -> Option<MemoryInfo> {
         .fold((0, 0), |(rss_sum, vms_sum), (rss, vms)| {
             (rss_sum + rss, vms_sum + vms)
         });
-    
+
     Some(MemoryInfo {
         rss: parent_memory.rss + children_memory.0,
         vms: parent_memory.vms + children_memory.1,
@@ -959,21 +1131,21 @@ pub fn get_process_memory_with_children(pid: i64) -> Option<MemoryInfo> {
 /// Stop the process
 pub fn process_stop(pid: i64) -> Result<(), String> {
     let children = process_find_children(pid);
-    
+
     // Stop child processes first
     for child_pid in children {
         let _ = kill(Pid::from_raw(child_pid as i32), Signal::SIGTERM);
         // Continue even if stopping child processes fails
     }
-    
+
     // Stop parent process
     match kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
         Ok(_) => Ok(()),
         Err(nix::errno::Errno::ESRCH) => {
             // Process already terminated
             Ok(())
-        },
-        Err(err) => Err(format!("Failed to stop process {}: {:?}", pid, err))
+        }
+        Err(err) => Err(format!("Failed to stop process {}: {:?}", pid, err)),
     }
 }
 
@@ -1014,15 +1186,16 @@ pub fn process_find_children(parent_pid: i64) -> Vec<i64> {
 
                 processes.iter().for_each(|process| {
                     if let Ok(Some(ppid)) = process.ppid() {
-                        parent_map.entry(ppid as i64)
+                        parent_map
+                            .entry(ppid as i64)
                             .or_insert_with(Vec::new)
                             .push(process.pid() as i64);
                     }
                 });
 
-                while let Some(pid) = to_check.pop() &&
-                    let Some(direct_children) = parent_map.get(&pid) {
-
+                while let Some(pid) = to_check.pop()
+                    && let Some(direct_children) = parent_map.get(&pid)
+                {
                     for &child in direct_children {
                         if !checked.contains(&child) {
                             children.push(child);
@@ -1031,7 +1204,7 @@ pub fn process_find_children(parent_pid: i64) -> Vec<i64> {
                         }
                     }
                 }
-            },
+            }
             Err(_) => {
                 log::warn!("Native process enumeration failed for PID {}", parent_pid);
             }
@@ -1050,8 +1223,8 @@ pub struct ProcessRunResult {
 
 /// Run the process
 pub fn process_run(metadata: ProcessMetadata) -> Result<ProcessRunResult, String> {
-    use std::process::{Command, Stdio};
     use std::fs::OpenOptions;
+    use std::process::{Command, Stdio};
 
     let log_base = format!("{}/{}", metadata.log_path, metadata.name.replace(' ', "_"));
     let stdout_path = format!("{}-out.log", log_base);
@@ -1073,20 +1246,21 @@ pub fn process_run(metadata: ProcessMetadata) -> Result<ProcessRunResult, String
     // Execute process
     let mut cmd = Command::new(&metadata.shell);
     cmd.args(&metadata.args)
-       .arg(&metadata.command)
-       .envs(metadata.env.iter().map(|env_var| {
-           let parts: Vec<&str> = env_var.splitn(2, '=').collect();
-           if parts.len() == 2 {
-               (parts[0], parts[1])
-           } else {
-               (env_var.as_str(), "")
-           }
-       }))
-       .stdout(Stdio::from(stdout_file))
-       .stderr(Stdio::from(stderr_file))
-       .stdin(Stdio::null());
+        .arg(&metadata.command)
+        .envs(metadata.env.iter().map(|env_var| {
+            let parts: Vec<&str> = env_var.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                (parts[0], parts[1])
+            } else {
+                (env_var.as_str(), "")
+            }
+        }))
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file))
+        .stdin(Stdio::null());
 
-    let child = cmd.spawn()
+    let child = cmd
+        .spawn()
         .map_err(|err| format!("Failed to spawn process: {:?}", err))?;
 
     let shell_pid = child.id() as i64;
@@ -1120,7 +1294,7 @@ mod tests {
     fn test_environment_variables() {
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-        
+
         let process = Process {
             id,
             pid: 12345,
@@ -1131,7 +1305,10 @@ mod tests {
             script: "echo 'hello world'".to_string(),
             restarts: 0,
             running: true,
-            crash: Crash { crashed: false, value: 0 },
+            crash: Crash {
+                crashed: false,
+                value: 0,
+            },
             watch: Watch {
                 enabled: false,
                 path: String::new(),
@@ -1142,18 +1319,21 @@ mod tests {
         };
 
         runner.list.insert(id, process);
-        
+
         // Test setting environment variables
         let mut env = BTreeMap::new();
         env.insert("TEST_VAR".to_string(), "test_value".to_string());
         env.insert("ANOTHER_VAR".to_string(), "another_value".to_string());
-        
+
         runner.set_env(id, env);
-        
+
         let process_env = &runner.info(id).unwrap().env;
         assert_eq!(process_env.get("TEST_VAR"), Some(&"test_value".to_string()));
-        assert_eq!(process_env.get("ANOTHER_VAR"), Some(&"another_value".to_string()));
-        
+        assert_eq!(
+            process_env.get("ANOTHER_VAR"),
+            Some(&"another_value".to_string())
+        );
+
         // Test clearing environment variables
         runner.clear_env(id);
         assert!(runner.info(id).unwrap().env.is_empty());
@@ -1163,7 +1343,7 @@ mod tests {
     fn test_children_processes() {
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-        
+
         let process = Process {
             id,
             pid: 12345,
@@ -1174,7 +1354,10 @@ mod tests {
             script: "echo 'hello world'".to_string(),
             restarts: 0,
             running: true,
-            crash: Crash { crashed: false, value: 0 },
+            crash: Crash {
+                crashed: false,
+                value: 0,
+            },
             watch: Watch {
                 enabled: false,
                 path: String::new(),
@@ -1185,11 +1368,11 @@ mod tests {
         };
 
         runner.list.insert(id, process);
-        
+
         // Test setting children
         let children = vec![12346, 12347, 12348];
         runner.set_children(id, children.clone());
-        
+
         assert_eq!(runner.info(id).unwrap().children, children);
     }
 
@@ -1198,13 +1381,13 @@ mod tests {
         // Test with current process (should return valid percentage)
         let current_pid = std::process::id() as i64;
         let cpu_usage = get_process_cpu_usage_percentage(current_pid);
-        
+
         // CPU usage should be between 0 and 100 * number of cores
         assert!(cpu_usage >= 0.0);
         assert!(cpu_usage <= 100.0 * num_cpus::get() as f64);
 
         println!("CPU usage: {}", cpu_usage);
-        
+
         // Test with invalid PID (should return 0.0)
         let invalid_pid = 999999;
         let cpu_usage = get_process_cpu_usage_percentage(invalid_pid);
@@ -1227,10 +1410,10 @@ mod tests {
         match process_run(metadata) {
             Ok(result) => {
                 assert!(result.pid > 0);
-                
+
                 // Wait a bit for process to complete
                 thread::sleep(Duration::from_millis(100));
-                
+
                 // Try to stop it (might already be finished)
                 let _ = process_stop(result.pid);
             }
@@ -1244,7 +1427,7 @@ mod tests {
     fn test_reset_counters() {
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-        
+
         let process = Process {
             id,
             pid: 12345,
@@ -1253,11 +1436,11 @@ mod tests {
             name: "test_process".to_string(),
             path: PathBuf::from("/tmp"),
             script: "echo 'hello world'".to_string(),
-            restarts: 5,  // Set to non-zero value
+            restarts: 5, // Set to non-zero value
             running: true,
-            crash: Crash { 
-                crashed: true,  // Set to crashed
-                value: 3  // Set to non-zero crash count
+            crash: Crash {
+                crashed: true, // Set to crashed
+                value: 3,      // Set to non-zero crash count
             },
             watch: Watch {
                 enabled: false,
@@ -1269,15 +1452,15 @@ mod tests {
         };
 
         runner.list.insert(id, process);
-        
+
         // Verify initial values
         assert_eq!(runner.info(id).unwrap().restarts, 5);
         assert_eq!(runner.info(id).unwrap().crash.value, 3);
         assert_eq!(runner.info(id).unwrap().crash.crashed, true);
-        
+
         // Reset counters
         runner.reset_counters(id);
-        
+
         // Verify counters are reset
         assert_eq!(runner.info(id).unwrap().restarts, 0);
         assert_eq!(runner.info(id).unwrap().crash.value, 0);

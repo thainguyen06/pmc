@@ -27,7 +27,9 @@ pub fn get_cpu_percent(pid: u32) -> f64 {
                             let irq: u64 = cpu_parts[6].parse().ok()?;
                             let softirq: u64 = cpu_parts[7].parse().ok()?;
 
-                            let total_system_time = (user + nice + system + idle + iowait + irq + softirq) as f64 / 100.0;
+                            let total_system_time =
+                                (user + nice + system + idle + iowait + irq + softirq) as f64
+                                    / 100.0;
                             return Some((total_process_time, total_system_time));
                         }
                     }
@@ -66,11 +68,11 @@ pub fn get_cpu_percent(pid: u32) -> f64 {
 pub fn get_cpu_percent_fast(pid: u32) -> f64 {
     use std::fs;
     use std::sync::OnceLock;
-    
+
     // Cache the number of CPUs as it doesn't change during execution
     static NUM_CPUS: OnceLock<usize> = OnceLock::new();
     let num_cpus = *NUM_CPUS.get_or_init(|| num_cpus::get());
-    
+
     // Cache clock ticks per second - retrieve it once from the system
     static CLOCK_TICKS_PER_SEC: OnceLock<f64> = OnceLock::new();
     let clock_ticks = *CLOCK_TICKS_PER_SEC.get_or_init(|| {
@@ -85,7 +87,7 @@ pub fn get_cpu_percent_fast(pid: u32) -> f64 {
             }
         }
     });
-    
+
     let stat_path = format!("/proc/{}/stat", pid);
     if let Ok(stat_content) = fs::read_to_string(&stat_path) {
         let parts: Vec<&str> = stat_content.split_whitespace().collect();
@@ -96,27 +98,27 @@ pub fn get_cpu_percent_fast(pid: u32) -> f64 {
         const UTIME_INDEX: usize = 13;
         const STIME_INDEX: usize = 14;
         const STARTTIME_INDEX: usize = 21;
-        
+
         if parts.len() > STARTTIME_INDEX {
             // Get process CPU time (utime + stime)
             let utime = parts[UTIME_INDEX].parse::<u64>().unwrap_or(0) as f64;
             let stime = parts[STIME_INDEX].parse::<u64>().unwrap_or(0) as f64;
             let starttime = parts[STARTTIME_INDEX].parse::<u64>().unwrap_or(0) as f64;
-            
+
             // Get system uptime
             if let Ok(uptime_content) = fs::read_to_string("/proc/uptime") {
                 if let Some(uptime_str) = uptime_content.split_whitespace().next() {
                     if let Ok(uptime) = uptime_str.parse::<f64>() {
                         // Calculate process uptime in seconds
                         let process_uptime = uptime - (starttime / clock_ticks);
-                        
+
                         if process_uptime > 0.0 {
                             // Total CPU time used by process in seconds
                             let process_cpu_time = (utime + stime) / clock_ticks;
-                            
+
                             // CPU percentage = (CPU time / elapsed time) * 100
                             let cpu_percent = (process_cpu_time / process_uptime) * 100.0;
-                            
+
                             // Clamp to reasonable value
                             return cpu_percent.min(100.0 * num_cpus as f64);
                         }
@@ -125,7 +127,7 @@ pub fn get_cpu_percent_fast(pid: u32) -> f64 {
             }
         }
     }
-    
+
     0.0
 }
 
@@ -181,14 +183,18 @@ fn get_cpu_percent_mach(pid: u32) -> Option<f64> {
 
     unsafe extern "C" {
         fn task_for_pid(target_tport: u32, pid: i32, task: *mut u32) -> i32;
-        fn task_info(target_task: u32, flavor: u32, task_info_out: *mut libc::c_void, task_info_outCnt: *mut u32) -> i32;
+        fn task_info(
+            target_task: u32,
+            flavor: u32,
+            task_info_out: *mut libc::c_void,
+            task_info_outCnt: *mut u32,
+        ) -> i32;
         fn mach_task_self() -> u32;
     }
 
     // Helper to convert TimeValue to seconds
-    let time_to_seconds = |tv: &TimeValue| -> f64 {
-        tv.seconds as f64 + tv.microseconds as f64 / 1_000_000.0
-    };
+    let time_to_seconds =
+        |tv: &TimeValue| -> f64 { tv.seconds as f64 + tv.microseconds as f64 / 1_000_000.0 };
 
     // Get task port for the process
     let mut task: u32 = 0;
@@ -199,7 +205,15 @@ fn get_cpu_percent_mach(pid: u32) -> Option<f64> {
     // Get first measurement
     let mut info: TaskBasicInfo = unsafe { mem::zeroed() };
     let mut count = TASK_BASIC_INFO_COUNT;
-    if unsafe { task_info(task, TASK_BASIC_INFO, &mut info as *mut _ as *mut libc::c_void, &mut count) } != 0 {
+    if unsafe {
+        task_info(
+            task,
+            TASK_BASIC_INFO,
+            &mut info as *mut _ as *mut libc::c_void,
+            &mut count,
+        )
+    } != 0
+    {
         return None;
     }
 
@@ -212,7 +226,15 @@ fn get_cpu_percent_mach(pid: u32) -> Option<f64> {
     // Get second measurement
     let mut info2: TaskBasicInfo = unsafe { mem::zeroed() };
     let mut count2 = TASK_BASIC_INFO_COUNT;
-    if unsafe { task_info(task, TASK_BASIC_INFO, &mut info2 as *mut _ as *mut libc::c_void, &mut count2) } != 0 {
+    if unsafe {
+        task_info(
+            task,
+            TASK_BASIC_INFO,
+            &mut info2 as *mut _ as *mut libc::c_void,
+            &mut count2,
+        )
+    } != 0
+    {
         return None;
     }
 
@@ -240,4 +262,4 @@ fn get_cpu_percent_ps(pid: u32) -> Option<f64> {
 
     let cpu_str = String::from_utf8(output.stdout).ok()?;
     cpu_str.trim().parse::<f64>().ok()
-} 
+}

@@ -22,11 +22,15 @@ impl serde::Serialize for ColoredString {
 }
 
 impl From<colored::ColoredString> for ColoredString {
-    fn from(cs: colored::ColoredString) -> Self { ColoredString(cs) }
+    fn from(cs: colored::ColoredString) -> Self {
+        ColoredString(cs)
+    }
 }
 
 impl fmt::Display for ColoredString {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 pub fn format_duration(datetime: DateTime<Utc>) -> String {
@@ -53,7 +57,9 @@ pub fn format_memory(bytes: u64) -> String {
     }
 
     let mut buffer = ryu::Buffer::new();
-    let result = buffer.format((UNIT.powf(base - base.floor()) * 10.0).round() / 10.0).trim_end_matches(".0");
+    let result = buffer
+        .format((UNIT.powf(base - base.floor()) * 10.0).round() / 10.0)
+        .trim_end_matches(".0");
 
     [result, SUFFIX[base.floor() as usize]].join("")
 }
@@ -62,14 +68,15 @@ pub fn format_memory(bytes: u64) -> String {
 pub fn parse_memory(mem_str: &str) -> Result<u64, String> {
     let mem_str = mem_str.trim().to_uppercase();
     let re = Regex::new(r"^(\d+(?:\.\d+)?)\s*([KMGT]?)B?$").unwrap();
-    
+
     match re.captures(&mem_str) {
         Some(caps) => {
             let num_str = &caps[1];
-            let num: f64 = num_str.parse()
+            let num: f64 = num_str
+                .parse()
                 .map_err(|_| format!("Invalid number format: {}", num_str))?;
             let unit = caps.get(2).map_or("", |m| m.as_str());
-            
+
             let multiplier: u64 = match unit {
                 "" | "B" => 1,
                 "K" => 1024,
@@ -78,15 +85,18 @@ pub fn parse_memory(mem_str: &str) -> Result<u64, String> {
                 "T" => 1024_u64.pow(4),
                 _ => return Err(format!("Unknown unit: {}", unit)),
             };
-            
+
             let result = num * multiplier as f64;
             // Check for overflow before casting to u64
             if result > u64::MAX as f64 || result < 0.0 {
                 return Err(format!("Memory value too large: {}{}", num, unit));
             }
-            
+
             Ok(result as u64)
         }
-        None => Err(format!("Invalid memory format: {}. Use format like '100M', '1G', '500K'", mem_str)),
+        None => Err(format!(
+            "Invalid memory format: {}. Use format like '100M', '1G', '500K'",
+            mem_str
+        )),
     }
 }

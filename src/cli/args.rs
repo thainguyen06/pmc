@@ -45,8 +45,12 @@ impl Items {
 }
 
 impl Validatable for Args {
-    fn from_id(id: usize) -> Self { Args::Id(id) }
-    fn from_string(s: String) -> Self { Args::Script(s) }
+    fn from_id(id: usize) -> Self {
+        Args::Id(id)
+    }
+    fn from_string(s: String) -> Self {
+        Args::Script(s)
+    }
 
     fn get_string(&self) -> Option<&str> {
         match self {
@@ -57,8 +61,12 @@ impl Validatable for Args {
 }
 
 impl Validatable for Item {
-    fn from_id(id: usize) -> Self { Item::Id(id) }
-    fn from_string(s: String) -> Self { Item::Name(s) }
+    fn from_id(id: usize) -> Self {
+        Item::Id(id)
+    }
+    fn from_string(s: String) -> Self {
+        Item::Name(s)
+    }
 
     fn get_string(&self) -> Option<&str> {
         match self {
@@ -84,7 +92,8 @@ pub fn validate_items(s: &str) -> Result<Items, String> {
     }
 
     // Split by commas first, then trim whitespace
-    let parts: Vec<&str> = s.split(',')
+    let parts: Vec<&str> = s
+        .split(',')
         .map(|p| p.trim())
         .filter(|p| !p.is_empty())
         .collect();

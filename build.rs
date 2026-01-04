@@ -1,9 +1,6 @@
 use chrono::Datelike;
 
-use std::{
-    env,
-    process::Command,
-};
+use std::{env, process::Command};
 
 fn main() {
     #[cfg(target_os = "windows")]
@@ -15,13 +12,30 @@ fn main() {
     /* version attributes */
     let date = chrono::Utc::now();
     let profile = env::var("PROFILE").unwrap();
-    let output = Command::new("git").args(&["rev-parse", "--short=10", "HEAD"]).output().unwrap();
-    let output_full = Command::new("git").args(&["rev-parse", "HEAD"]).output().unwrap();
+    let output = Command::new("git")
+        .args(&["rev-parse", "--short=10", "HEAD"])
+        .output()
+        .unwrap();
+    let output_full = Command::new("git")
+        .args(&["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
 
     println!("cargo:rustc-env=TARGET={}", env::var("TARGET").unwrap());
-    println!("cargo:rustc-env=GIT_HASH={}", String::from_utf8(output.stdout).unwrap());
-    println!("cargo:rustc-env=GIT_HASH_FULL={}", String::from_utf8(output_full.stdout).unwrap());
-    println!("cargo:rustc-env=BUILD_DATE={}-{}-{}", date.year(), date.month(), date.day());
+    println!(
+        "cargo:rustc-env=GIT_HASH={}",
+        String::from_utf8(output.stdout).unwrap()
+    );
+    println!(
+        "cargo:rustc-env=GIT_HASH_FULL={}",
+        String::from_utf8(output_full.stdout).unwrap()
+    );
+    println!(
+        "cargo:rustc-env=BUILD_DATE={}-{}-{}",
+        date.year(),
+        date.month(),
+        date.day()
+    );
 
     /* profile matching */
     match profile.as_str() {
@@ -30,11 +44,9 @@ fn main() {
         _ => println!("cargo:rustc-env=PROFILE=none"),
     }
 
-    let watched = vec![
-        "lib",
-        "src/lib.rs",
-        "lib/include",
-    ];
+    let watched = vec!["lib", "src/lib.rs", "lib/include"];
 
-    watched.iter().for_each(|file| println!("cargo:rerun-if-changed={file}"));
+    watched
+        .iter()
+        .for_each(|file| println!("cargo:rerun-if-changed={file}"));
 }

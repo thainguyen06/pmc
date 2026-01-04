@@ -4,7 +4,7 @@ mod fork;
 
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use fork::{daemon, Fork};
+use fork::{Fork, daemon};
 use global_placeholders::global;
 use macros_rs::{crashln, str, string, ternary, then};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -16,17 +16,17 @@ use std::{process, thread::sleep, time::Duration};
 use opm::{
     config, file,
     helpers::{self, ColoredString},
-    process::{hash, id::Id, Runner, Status, get_process_cpu_usage_with_children_from_process},
+    process::{Runner, Status, get_process_cpu_usage_with_children_from_process, hash, id::Id},
 };
 
 use tabled::{
+    Table, Tabled,
     settings::{
+        Color, Rotate,
         object::Columns,
         style::{BorderColor, Style},
         themes::Colorization,
-        Color, Rotate,
     },
-    Table, Tabled,
 };
 
 extern "C" fn handle_termination_signal(_: libc::c_int) {
@@ -48,14 +48,19 @@ fn restart_process() {
         // Check memory limit if configured
         if item.running && item.max_memory > 0 {
             let pid_for_monitoring = item.shell_pid.unwrap_or(item.pid);
-            if let Some(memory_info) = opm::process::get_process_memory_with_children(pid_for_monitoring) {
+            if let Some(memory_info) =
+                opm::process::get_process_memory_with_children(pid_for_monitoring)
+            {
                 if memory_info.rss > item.max_memory {
                     log!("[daemon] memory limit exceeded", "name" => item.name, "id" => id, 
                          "memory" => memory_info.rss, "limit" => item.max_memory);
-                    println!("{} Process ({}) exceeded memory limit: {} > {} - stopping process", 
-                             *helpers::FAIL, item.name, 
-                             helpers::format_memory(memory_info.rss),
-                             helpers::format_memory(item.max_memory));
+                    println!(
+                        "{} Process ({}) exceeded memory limit: {} > {} - stopping process",
+                        *helpers::FAIL,
+                        item.name,
+                        helpers::format_memory(memory_info.rss),
+                        helpers::format_memory(item.max_memory)
+                    );
                     runner.stop(item.id);
                     // Don't mark as crashed since this is intentional enforcement
                     runner.save();
@@ -87,14 +92,14 @@ fn restart_process() {
 
         // Process crashed - handle restart logic
         let max_restarts = config::read().daemon.restarts;
-        
+
         if item.crash.value >= max_restarts {
             log!("[daemon] process exceeded max crashes", "name" => item.name, "id" => id, "crashes" => item.crash.value);
             runner.stop(item.id);
             runner.set_crashed(*id).save();
             continue;
         }
-        
+
         // Attempt to restart the crashed process
         log!("[daemon] attempting restart", "name" => item.name, "id" => id, "crashes" => item.crash.value);
         runner.get(item.id).crashed();
@@ -151,7 +156,10 @@ pub fn health(format: &String) {
                 pid = Some(process.pid() as i32);
                 uptime = Some(pid::uptime().unwrap());
                 memory_usage = process.memory_info().ok().map(MemoryInfo::from);
-                cpu_percent = Some(get_process_cpu_usage_with_children_from_process(&process, process_id.get::<i64>()));
+                cpu_percent = Some(get_process_cpu_usage_with_children_from_process(
+                    &process,
+                    process_id.get::<i64>(),
+                ));
             }
         }
     }
@@ -185,7 +193,11 @@ pub fn health(format: &String) {
         external: global!("opm.daemon.kind"),
         process_count: runner.count(),
         pid_file: format!("{}  ", global!("opm.pid")),
-        status: ColoredString(ternary!(pid::exists(), "online".green().bold(), "stopped".red().bold())),
+        status: ColoredString(ternary!(
+            pid::exists(),
+            "online".green().bold(),
+            "stopped".red().bold()
+        )),
     }];
 
     let table = Table::new(data.clone())
@@ -200,9 +212,18 @@ pub fn health(format: &String) {
             "raw" => println!("{:?}", data[0]),
             "json" => println!("{json}"),
             "default" => {
-                println!("{}\n{table}\n", format!("OPM daemon information").on_bright_white().black());
-                println!(" {}", format!("Use `opm daemon restart` to restart the daemon").white());
-                println!(" {}", format!("Use `opm daemon reset` to clean process id values").white());
+                println!(
+                    "{}\n{table}\n",
+                    format!("OPM daemon information").on_bright_white().black()
+                );
+                println!(
+                    " {}",
+                    format!("Use `opm daemon restart` to restart the daemon").white()
+                );
+                println!(
+                    " {}",
+                    format!("Use `opm daemon reset` to clean process id values").white()
+                );
             }
             _ => {}
         };
@@ -230,7 +251,11 @@ pub fn stop() {
 }
 
 pub fn start(verbose: bool) {
-    println!("{} Spawning OPM daemon (opm_base={})", *helpers::SUCCESS, global!("opm.base"));
+    println!(
+        "{} Spawning OPM daemon (opm_base={})",
+        *helpers::SUCCESS,
+        global!("opm.base")
+    );
 
     if pid::exists() {
         match pid::read() {
@@ -257,7 +282,11 @@ pub fn start(verbose: bool) {
         }
     }
 
-    println!("{} OPM Successfully daemonized (type={})", *helpers::SUCCESS, global!("opm.daemon.kind"));
+    println!(
+        "{} OPM Successfully daemonized (type={})",
+        *helpers::SUCCESS,
+        global!("opm.daemon.kind")
+    );
     match daemon(false, verbose) {
         Ok(Fork::Parent(_)) => {}
         Ok(Fork::Child) => init(),
@@ -275,27 +304,27 @@ pub fn restart(verbose: bool) {
 
 pub fn reset() {
     let mut runner = Runner::new();
-    
+
     // Check if ID 0 exists but ID 1 exists
     if !runner.exists(0) && runner.exists(1) {
         // Get the process at ID 1
         if let Some(process_at_1) = runner.info(1).cloned() {
             // Remove it from ID 1
             runner.list.remove(&1);
-            
+
             // Insert it at ID 0
             let mut new_process = process_at_1;
             new_process.id = 0;
             runner.list.insert(0, new_process);
-            
+
             // Save the changes
             runner.save();
-            
+
             println!("{} Rearranged ID 1 to ID 0", *helpers::SUCCESS);
             log!("[daemon] rearranged ID 1 to ID 0", "id" => "0");
         }
     }
-    
+
     let largest = runner.size();
 
     match largest {
@@ -303,7 +332,11 @@ pub fn reset() {
         None => runner.set_id(Id::new(0)),
     }
 
-    println!("{} Successfully reset (index={})", *helpers::SUCCESS, runner.id);
+    println!(
+        "{} Successfully reset (index={})",
+        *helpers::SUCCESS,
+        runner.id
+    );
 }
 
 pub mod pid;

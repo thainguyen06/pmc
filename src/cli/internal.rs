@@ -12,21 +12,25 @@ use opm::{
     config, file,
     helpers::{self, ColoredString},
     log,
-    process::{http, ItemSingle, Runner, get_process_cpu_usage_with_children_from_process, get_process_memory_with_children},
+    process::{
+        ItemSingle, Runner, get_process_cpu_usage_with_children_from_process,
+        get_process_memory_with_children, http,
+    },
 };
 
 use tabled::{
+    Table, Tabled,
     settings::{
+        Color, Modify, Rotate, Width,
         object::{Columns, Rows},
         style::{BorderColor, Style},
         themes::Colorization,
-        Color, Modify, Rotate, Width,
     },
-    Table, Tabled,
 };
 
 lazy_static! {
-    static ref SCRIPT_EXTENSION_PATTERN: Regex = Regex::new(r"^[^\s]+\.(js|ts|py|sh|rb|pl|php)(\s|$)").unwrap();
+    static ref SCRIPT_EXTENSION_PATTERN: Regex =
+        Regex::new(r"^[^\s]+\.(js|ts|py|sh|rb|pl|php)(\s|$)").unwrap();
     static ref SIMPLE_PATH_PATTERN: Regex = Regex::new(r"^[a-zA-Z0-9]+(/[a-zA-Z0-9]+)*$").unwrap();
 }
 
@@ -41,7 +45,14 @@ pub struct Internal<'i> {
 }
 
 impl<'i> Internal<'i> {
-    pub fn create(mut self, script: &String, name: &Option<String>, watch: &Option<String>, max_memory: &Option<String>, silent: bool) -> Runner {
+    pub fn create(
+        mut self,
+        script: &String,
+        name: &Option<String>,
+        watch: &Option<String>,
+        max_memory: &Option<String>,
+        silent: bool,
+    ) -> Runner {
         let config = config::read();
         let name = match name {
             Some(name) => string!(name),
@@ -61,7 +72,7 @@ impl<'i> Internal<'i> {
             // Check if script is a file path with an extension
             let script_to_run = if let Some(ext_start) = script.rfind('.') {
                 let ext = &script[ext_start..];
-                
+
                 if SCRIPT_EXTENSION_PATTERN.is_match(script) {
                     // It's a script file with extension - determine the interpreter
                     let interpreter = match ext {
@@ -73,7 +84,7 @@ impl<'i> Internal<'i> {
                         ".php" => "php".to_string(),
                         _ => "".to_string(),
                     };
-                    
+
                     if !interpreter.is_empty() {
                         format!("{} {}", interpreter, script)
                     } else {
@@ -91,7 +102,9 @@ impl<'i> Internal<'i> {
                 }
             };
 
-            self.runner.start(&name, &script_to_run, file::cwd(), watch, max_memory_bytes).save();
+            self.runner
+                .start(&name, &script_to_run, file::cwd(), watch, max_memory_bytes)
+                .save();
         } else {
             let Some(servers) = config::servers().servers else {
                 crashln!("{} Failed to read servers", *helpers::FAIL)
@@ -99,23 +112,57 @@ impl<'i> Internal<'i> {
 
             if let Some(server) = servers.get(self.server_name) {
                 match Runner::connect(self.server_name.into(), server.get(), false) {
-                    Some(mut remote) => remote.start(&name, script, file::cwd(), watch, max_memory_bytes),
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    Some(mut remote) => {
+                        remote.start(&name, script, file::cwd(), watch, max_memory_bytes)
+                    }
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name,)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name,
+                )
             };
         }
 
-
-        then!(!silent, println!("{} Creating {}process with ({name})", *helpers::SUCCESS, self.kind));
-        then!(!silent, println!("{} {}Created ({name}) ✓", *helpers::SUCCESS, self.kind));
+        then!(
+            !silent,
+            println!(
+                "{} Creating {}process with ({name})",
+                *helpers::SUCCESS,
+                self.kind
+            )
+        );
+        then!(
+            !silent,
+            println!("{} {}Created ({name}) ✓", *helpers::SUCCESS, self.kind)
+        );
 
         return self.runner;
     }
 
-    pub fn restart(mut self, name: &Option<String>, watch: &Option<String>, reset_env: bool, silent: bool) -> Runner {
-        then!(!silent, println!("{} Applying {}action restartProcess on ({})", *helpers::SUCCESS, self.kind, self.id));
+    pub fn restart(
+        mut self,
+        name: &Option<String>,
+        watch: &Option<String>,
+        reset_env: bool,
+        silent: bool,
+    ) -> Runner {
+        then!(
+            !silent,
+            println!(
+                "{} Applying {}action restartProcess on ({})",
+                *helpers::SUCCESS,
+                self.kind,
+                self.id
+            )
+        );
 
         if matches!(self.server_name, "internal" | "local") {
             let mut item = self.runner.get(self.id);
@@ -127,7 +174,8 @@ impl<'i> Internal<'i> {
 
             then!(reset_env, item.clear_env());
 
-            name.as_ref().map(|n| item.rename(n.trim().replace("\n", "")));
+            name.as_ref()
+                .map(|n| item.rename(n.trim().replace("\n", "")));
             item.restart();
 
             self.runner = item.get_runner().clone();
@@ -143,18 +191,33 @@ impl<'i> Internal<'i> {
 
                         then!(reset_env, item.clear_env());
 
-                        name.as_ref().map(|n| item.rename(n.trim().replace("\n", "")));
+                        name.as_ref()
+                            .map(|n| item.rename(n.trim().replace("\n", "")));
                         item.restart();
                     }
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 }
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
         if !silent {
-            println!("{} Restarted {}({}) ✓", *helpers::SUCCESS, self.kind, self.id);
+            println!(
+                "{} Restarted {}({}) ✓",
+                *helpers::SUCCESS,
+                self.kind,
+                self.id
+            );
             log!("process started (id={})", self.id);
         }
 
@@ -162,7 +225,15 @@ impl<'i> Internal<'i> {
     }
 
     pub fn reload(mut self, silent: bool) -> Runner {
-        then!(!silent, println!("{} Applying {}action reloadProcess on ({})", *helpers::SUCCESS, self.kind, self.id));
+        then!(
+            !silent,
+            println!(
+                "{} Applying {}action reloadProcess on ({})",
+                *helpers::SUCCESS,
+                self.kind,
+                self.id
+            )
+        );
 
         if matches!(self.server_name, "internal" | "local") {
             let mut item = self.runner.get(self.id);
@@ -179,15 +250,29 @@ impl<'i> Internal<'i> {
                         let mut item = remote.get(self.id);
                         item.reload();
                     }
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 }
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
         if !silent {
-            println!("{} Reloaded {}({}) ✓", *helpers::SUCCESS, self.kind, self.id);
+            println!(
+                "{} Reloaded {}({}) ✓",
+                *helpers::SUCCESS,
+                self.kind,
+                self.id
+            );
             log!("process reloaded (id={})", self.id);
         }
 
@@ -195,7 +280,15 @@ impl<'i> Internal<'i> {
     }
 
     pub fn stop(mut self, silent: bool) -> Runner {
-        then!(!silent, println!("{} Applying {}action stopProcess on ({})", *helpers::SUCCESS, self.kind, self.id));
+        then!(
+            !silent,
+            println!(
+                "{} Applying {}action stopProcess on ({})",
+                *helpers::SUCCESS,
+                self.kind,
+                self.id
+            )
+        );
 
         if !matches!(self.server_name, "internal" | "local") {
             let Some(servers) = config::servers().servers else {
@@ -205,10 +298,19 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 self.runner = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
@@ -225,7 +327,12 @@ impl<'i> Internal<'i> {
     }
 
     pub fn remove(mut self) {
-        println!("{} Applying {}action removeProcess on ({})", *helpers::SUCCESS, self.kind, self.id);
+        println!(
+            "{} Applying {}action removeProcess on ({})",
+            *helpers::SUCCESS,
+            self.kind,
+            self.id
+        );
 
         if !matches!(self.server_name, "internal" | "local") {
             let Some(servers) = config::servers().servers else {
@@ -235,10 +342,19 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 self.runner = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to remove (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to remove (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
@@ -248,7 +364,12 @@ impl<'i> Internal<'i> {
     }
 
     pub fn flush(&mut self) {
-        println!("{} Applying {}action flushLogs on ({})", *helpers::SUCCESS, self.kind, self.id);
+        println!(
+            "{} Applying {}action flushLogs on ({})",
+            *helpers::SUCCESS,
+            self.kind,
+            self.id
+        );
 
         if !matches!(self.server_name, "internal" | "local") {
             let Some(servers) = config::servers().servers else {
@@ -258,15 +379,29 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 self.runner = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to remove (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to remove (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
         self.runner.flush(self.id);
-        println!("{} Flushed Logs {}({}) ✓", *helpers::SUCCESS, self.kind, self.id);
+        println!(
+            "{} Flushed Logs {}({}) ✓",
+            *helpers::SUCCESS,
+            self.kind,
+            self.id
+        );
         log!("process logs cleaned (id={})", self.id);
     }
 
@@ -339,9 +474,25 @@ impl<'i> Internal<'i> {
                     "raw" => println!("{:?}", data[0]),
                     "json" => println!("{json}"),
                     _ => {
-                        println!("{}\n{table}\n", format!("Describing {}process with id ({})", self.kind, self.id).on_bright_white().black());
-                        println!(" {}", format!("Use `opm logs {} [--lines <num>]` to display logs", self.id).white());
-                        println!(" {}", format!("Use `opm env {}`  to display environment variables", self.id).white());
+                        println!(
+                            "{}\n{table}\n",
+                            format!("Describing {}process with id ({})", self.kind, self.id)
+                                .on_bright_white()
+                                .black()
+                        );
+                        println!(
+                            " {}",
+                            format!("Use `opm logs {} [--lines <num>]` to display logs", self.id)
+                                .white()
+                        );
+                        println!(
+                            " {}",
+                            format!(
+                                "Use `opm env {}`  to display environment variables",
+                                self.id
+                            )
+                            .white()
+                        );
                     }
                 };
             };
@@ -356,15 +507,24 @@ impl<'i> Internal<'i> {
                 let mut memory_usage: Option<MemoryInfo> = None;
                 let mut cpu_percent: Option<f64> = None;
 
-                let path = file::make_relative(&item.path, &home).to_string_lossy().into_owned();
-                let children = if item.children.is_empty() { "none".to_string() } else { format!("{:?}", item.children) };
+                let path = file::make_relative(&item.path, &home)
+                    .to_string_lossy()
+                    .into_owned();
+                let children = if item.children.is_empty() {
+                    "none".to_string()
+                } else {
+                    format!("{:?}", item.children)
+                };
 
                 // For shell scripts, use shell_pid to capture the entire process tree
                 let pid_for_monitoring = item.shell_pid.unwrap_or(item.pid);
 
                 if let Ok(process) = Process::new(pid_for_monitoring as u32) {
                     memory_usage = get_process_memory_with_children(pid_for_monitoring);
-                    cpu_percent = Some(get_process_cpu_usage_with_children_from_process(&process, pid_for_monitoring));
+                    cpu_percent = Some(get_process_cpu_usage_with_children_from_process(
+                        &process,
+                        pid_for_monitoring,
+                    ));
                 }
 
                 let cpu_percent = match cpu_percent {
@@ -407,10 +567,27 @@ impl<'i> Internal<'i> {
                     log_error: item.logs().error,
                     status: ColoredString(status),
                     pid: ternary!(item.running, format!("{}", item.pid), string!("n/a")),
-                    command: format!("{} {} '{}'", config.shell, config.args.join(" "), item.script),
-                    hash: ternary!(item.watch.enabled, format!("{}  ", item.watch.hash), string!("none  ")),
-                    watch: ternary!(item.watch.enabled, format!("{path}/{}  ", item.watch.path), string!("disabled  ")),
-                    uptime: ternary!(item.running, format!("{}", helpers::format_duration(item.started)), string!("none")),
+                    command: format!(
+                        "{} {} '{}'",
+                        config.shell,
+                        config.args.join(" "),
+                        item.script
+                    ),
+                    hash: ternary!(
+                        item.watch.enabled,
+                        format!("{}  ", item.watch.hash),
+                        string!("none  ")
+                    ),
+                    watch: ternary!(
+                        item.watch.enabled,
+                        format!("{path}/{}  ", item.watch.path),
+                        string!("disabled  ")
+                    ),
+                    uptime: ternary!(
+                        item.running,
+                        format!("{}", helpers::format_duration(item.started)),
+                        string!("none")
+                    ),
                 }];
 
                 render_info(data)
@@ -426,10 +603,19 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 data = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(mut remote) => (remote.process(self.id).clone(), remote),
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
 
             let (item, remote) = data;
@@ -450,7 +636,11 @@ impl<'i> Internal<'i> {
 
             if let Ok(info) = info {
                 let stats = info.json::<ItemSingle>().unwrap().stats;
-                let children = if item.children.is_empty() { "none".to_string() } else { format!("{:?}", item.children) };
+                let children = if item.children.is_empty() {
+                    "none".to_string()
+                } else {
+                    format!("{:?}", item.children)
+                };
 
                 let cpu_percent = match stats.cpu_percent {
                     Some(percent) => format!("{percent:.2}%"),
@@ -478,13 +668,34 @@ impl<'i> Internal<'i> {
                     status: status.into(),
                     restarts: item.restarts,
                     name: item.name.clone(),
-                    pid: ternary!(item.running, format!("{pid}", pid = item.pid), string!("n/a")),
+                    pid: ternary!(
+                        item.running,
+                        format!("{pid}", pid = item.pid),
+                        string!("n/a")
+                    ),
                     log_out: format!("{}/{}-out.log", remote.config.log_path, item.name),
                     log_error: format!("{}/{}-error.log", remote.config.log_path, item.name),
-                    hash: ternary!(item.watch.enabled, format!("{}  ", item.watch.hash), string!("none  ")),
-                    command: format!("{} {} '{}'", remote.config.shell, remote.config.args.join(" "), item.script),
-                    watch: ternary!(item.watch.enabled, format!("{path}/{}  ", item.watch.path), string!("disabled  ")),
-                    uptime: ternary!(item.running, format!("{}", helpers::format_duration(item.started)), string!("none")),
+                    hash: ternary!(
+                        item.watch.enabled,
+                        format!("{}  ", item.watch.hash),
+                        string!("none  ")
+                    ),
+                    command: format!(
+                        "{} {} '{}'",
+                        remote.config.shell,
+                        remote.config.args.join(" "),
+                        item.script
+                    ),
+                    watch: ternary!(
+                        item.watch.enabled,
+                        format!("{path}/{}  ", item.watch.path),
+                        string!("disabled  ")
+                    ),
+                    uptime: ternary!(
+                        item.running,
+                        format!("{}", helpers::format_duration(item.started)),
+                        string!("none")
+                    ),
                 }];
 
                 render_info(data)
@@ -492,7 +703,14 @@ impl<'i> Internal<'i> {
         }
     }
 
-    pub fn logs(mut self, lines: &usize, follow: bool, filter: Option<&str>, errors_only: bool, stats: bool) {
+    pub fn logs(
+        mut self,
+        lines: &usize,
+        follow: bool,
+        filter: Option<&str>,
+        errors_only: bool,
+        stats: bool,
+    ) {
         if !matches!(self.server_name, "internal" | "local") {
             let Some(servers) = config::servers().servers else {
                 crashln!("{} Failed to read servers", *helpers::FAIL)
@@ -501,13 +719,25 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 self.runner = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
 
-            let item = self.runner.info(self.id).unwrap_or_else(|| crashln!("{} Process ({}) not found", *helpers::FAIL, self.id));
+            let item = self
+                .runner
+                .info(self.id)
+                .unwrap_or_else(|| crashln!("{} Process ({}) not found", *helpers::FAIL, self.id));
             println!(
                 "{}",
                 format!("Showing last {lines} lines for {}process [{}] (change the value with --lines option)", self.kind, self.id).yellow()
@@ -517,7 +747,7 @@ impl<'i> Internal<'i> {
                 if errors_only && kind == "out" {
                     continue;
                 }
-                
+
                 let logs = http::logs(&self.runner.remote.as_ref().unwrap(), self.id, kind);
 
                 if let Ok(log) = logs {
@@ -526,16 +756,25 @@ impl<'i> Internal<'i> {
                         continue;
                     }
 
-                    file::logs_internal_with_options(log.lines, *lines, log.path, self.id, kind, &item.name, filter, stats)
+                    file::logs_internal_with_options(
+                        log.lines, *lines, log.path, self.id, kind, &item.name, filter, stats,
+                    )
                 }
             }
         } else {
-            let item = self.runner.info(self.id).unwrap_or_else(|| crashln!("{} Process ({}) not found", *helpers::FAIL, self.id));
-            
+            let item = self
+                .runner
+                .info(self.id)
+                .unwrap_or_else(|| crashln!("{} Process ({}) not found", *helpers::FAIL, self.id));
+
             if follow {
                 println!(
                     "{}",
-                    format!("Following logs for {}process [{}] (press Ctrl+C to exit)", self.kind, self.id).yellow()
+                    format!(
+                        "Following logs for {}process [{}] (press Ctrl+C to exit)",
+                        self.kind, self.id
+                    )
+                    .yellow()
                 );
             } else {
                 println!(
@@ -563,7 +802,10 @@ impl<'i> Internal<'i> {
     }
 
     pub fn env(mut self) {
-        println!("{}", format!("Showing env for {}process {}:\n", self.kind, self.id).bright_yellow());
+        println!(
+            "{}",
+            format!("Showing env for {}process {}:\n", self.kind, self.id).bright_yellow()
+        );
 
         if !matches!(self.server_name, "internal" | "local") {
             let Some(servers) = config::servers().servers else {
@@ -573,19 +815,37 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 self.runner = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
         let item = self.runner.process(self.id);
-        item.env.iter().for_each(|(key, value)| println!("{}: {}", key, value.green()));
+        item.env
+            .iter()
+            .for_each(|(key, value)| println!("{}: {}", key, value.green()));
     }
 
     pub fn get_command(mut self) {
-        println!("{}", format!("Showing startup command for {}process {}:\n", self.kind, self.id).bright_yellow());
+        println!(
+            "{}",
+            format!(
+                "Showing startup command for {}process {}:\n",
+                self.kind, self.id
+            )
+            .bright_yellow()
+        );
 
         if !matches!(self.server_name, "internal" | "local") {
             let Some(servers) = config::servers().servers else {
@@ -595,19 +855,36 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(self.server_name) {
                 self.runner = match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => remote,
-                    None => crashln!("{} Failed to connect (name={}, address={})", *helpers::FAIL, self.server_name, server.address),
+                    None => crashln!(
+                        "{} Failed to connect (name={}, address={})",
+                        *helpers::FAIL,
+                        self.server_name,
+                        server.address
+                    ),
                 };
             } else {
-                crashln!("{} Server '{}' does not exist", *helpers::FAIL, self.server_name)
+                crashln!(
+                    "{} Server '{}' does not exist",
+                    *helpers::FAIL,
+                    self.server_name
+                )
             };
         }
 
         let item = self.runner.process(self.id);
         let config = config::read().runner;
-        let command = format!("{} {} '{}'", config.shell, config.args.join(" "), item.script);
-        
+        let command = format!(
+            "{} {} '{}'",
+            config.shell,
+            config.args.join(" "),
+            item.script
+        );
+
         println!("{}", command.green().bold());
-        println!("\n{}", "You can use this command to start the process manually:".dimmed());
+        println!(
+            "\n{}",
+            "You can use this command to start the process manually:".dimmed()
+        );
         println!("{}", command.white());
     }
 
@@ -631,7 +908,7 @@ impl<'i> Internal<'i> {
         // Clear log folder before restoring processes
         let config = config::read();
         let log_path = &config.runner.log_path;
-        
+
         if file::Exists::check(log_path).folder() {
             // Remove all log files in the log directory
             if let Ok(entries) = fs::read_dir(log_path) {
@@ -653,7 +930,7 @@ impl<'i> Internal<'i> {
         }
 
         let mut running_ids = Vec::new();
-        
+
         Runner::new().list().for_each(|(id, p)| {
             if p.running {
                 running_ids.push(*id);
@@ -666,14 +943,17 @@ impl<'i> Internal<'i> {
                 .restart(&None, &None, false, true);
             }
         });
-        
+
         // Reset restart and crash counters after restore for all running processes
         for id in running_ids {
             runner.reset_counters(id);
         }
         runner.save();
 
-        println!("{} Restored process statuses from dumpfile", *helpers::SUCCESS);
+        println!(
+            "{} Restored process statuses from dumpfile",
+            *helpers::SUCCESS
+        );
         Internal::list(&string!("default"), &list_name);
     }
 
@@ -697,7 +977,10 @@ impl<'i> Internal<'i> {
             }
 
             impl serde::Serialize for ProcessItem {
-                fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                fn serialize<S: serde::Serializer>(
+                    &self,
+                    serializer: S,
+                ) -> Result<S::Ok, S::Error> {
                     let trimmed_json = json!({
                         "cpu": &self.cpu.trim(),
                         "mem": &self.mem.trim(),
@@ -728,8 +1011,11 @@ impl<'i> Internal<'i> {
 
                         if let Ok(process) = Process::new(pid_for_monitoring as u32) {
                             usage_internals = (
-                                Some(get_process_cpu_usage_with_children_from_process(&process, pid_for_monitoring)),
-                                get_process_memory_with_children(pid_for_monitoring)
+                                Some(get_process_cpu_usage_with_children_from_process(
+                                    &process,
+                                    pid_for_monitoring,
+                                )),
+                                get_process_memory_with_children(pid_for_monitoring),
                             );
                         }
 
@@ -779,8 +1065,16 @@ impl<'i> Internal<'i> {
                         restarts: format!("{}  ", item.restarts),
                         name: format!("{}   ", item.name.clone()),
                         pid: ternary!(item.running, format!("{}  ", item.pid), string!("n/a  ")),
-                        watch: ternary!(item.watch.enabled, format!("{}  ", item.watch.path), string!("disabled  ")),
-                        uptime: ternary!(item.running, format!("{}  ", helpers::format_duration(item.started)), string!("none  ")),
+                        watch: ternary!(
+                            item.watch.enabled,
+                            format!("{}  ", item.watch.path),
+                            string!("disabled  ")
+                        ),
+                        uptime: ternary!(
+                            item.running,
+                            format!("{}  ", helpers::format_duration(item.started)),
+                            string!("none  ")
+                        ),
                     });
                 }
 
@@ -808,7 +1102,11 @@ impl<'i> Internal<'i> {
             if let Some(server) = servers.get(server_name) {
                 match Runner::connect(server_name.clone(), server.get(), true) {
                     Some(mut remote) => render_list(&mut remote, false),
-                    None => println!("{} Failed to fetch (name={server_name}, address={})", *helpers::FAIL, server.address),
+                    None => println!(
+                        "{} Failed to fetch (name={server_name}, address={})",
+                        *helpers::FAIL,
+                        server.address
+                    ),
                 }
             } else {
                 if matches!(&**server_name, "internal" | "all" | "global" | "local") {
@@ -832,9 +1130,14 @@ impl<'i> Internal<'i> {
 
             if !failed.is_empty() {
                 println!("{} Failed servers:", *helpers::FAIL);
-                failed
-                    .iter()
-                    .for_each(|server| println!(" {} {} {}", "-".yellow(), format!("{}", server.0), format!("[{}]", server.1).white()));
+                failed.iter().for_each(|server| {
+                    println!(
+                        " {} {} {}",
+                        "-".yellow(),
+                        format!("{}", server.0),
+                        format!("[{}]", server.1).white()
+                    )
+                });
             }
         } else {
             render_list(&mut Runner::new(), true);
