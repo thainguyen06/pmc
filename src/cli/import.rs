@@ -1,4 +1,4 @@
-use super::Item;
+use super::{Item, Items};
 use colored::Colorize;
 use macros_rs::{crashln, string};
 use serde::{Deserialize, Serialize};
@@ -89,18 +89,60 @@ pub fn read_hcl(path: &String) {
     println!("{} Applied startProcess to imported items", *helpers::SUCCESS);
 }
 
-pub fn export_hcl(item: &Item, path: &Option<String>) {
+pub fn export_hcl(items: &Items, path: &Option<String>) {
     println!("{} Applying action exportProcess", *helpers::SUCCESS);
 
     let runner = Runner::new();
+    let mut process_ids = Vec::new();
 
-    let fetch_process = |id: usize| {
-        let process = runner.try_info(id);
+    // Handle "all" case
+    if items.is_all() {
+        // Get all process IDs from the runner
+        for id in runner.list.keys() {
+            process_ids.push(*id);
+        }
+        
+        if process_ids.is_empty() {
+            crashln!("{} No processes found to export", *helpers::FAIL);
+        }
+    } else {
+        // Collect specific process IDs
+        for item in &items.items {
+            match item {
+                Item::Id(id) => process_ids.push(*id),
+                Item::Name(name) => match runner.find(&name, &string!("internal")) {
+                    Some(id) => process_ids.push(id),
+                    None => crashln!("{} Process ({name}) not found", *helpers::FAIL),
+                },
+            }
+        }
+    }
+
+    // Determine output path
+    let output_path = if let Some(p) = path {
+        p.clone()
+    } else if process_ids.len() == 1 {
+        let process = runner.try_info(process_ids[0]);
+        format!("{}.hcl", process.name)
+    } else {
+        "processes.hcl".to_string()
+    };
+
+    // Check if file already exists and clear it
+    if Exists::check(&output_path).file() {
+        if let Err(err) = fs::write(&output_path, "") {
+            crashln!("{} Error clearing existing file.\n{}", *helpers::FAIL, string!(err).white())
+        }
+    }
+
+    // Export each process
+    let count = process_ids.len();
+    for id in &process_ids {
+        let process = runner.try_info(*id);
         let mut watch_parsed = None;
         let mut env_parsed = HashMap::new();
 
         let current_env: HashMap<String, String> = std::env::vars().collect();
-        let path = path.clone().unwrap_or(format!("{}.hcl", process.name.clone()));
 
         if process.watch.enabled {
             watch_parsed = Some(Watch { path: process.watch.path.clone() })
@@ -126,7 +168,6 @@ pub fn export_hcl(item: &Item, path: &Option<String>) {
         let data = hcl::block! {
             process (process.name.clone()) {
                 script = (process.script.clone())
-                server = ("")
                 watch = (watch_parsed)
                 env = (env_parsed)
                 max_memory = (max_memory_str)
@@ -135,25 +176,18 @@ pub fn export_hcl(item: &Item, path: &Option<String>) {
 
         let serialized = hcl::to_string(&data).unwrap();
 
-        if Exists::check(&path).file() {
-            let mut file = OpenOptions::new().write(true).append(true).open(path.clone()).unwrap();
-            if let Err(err) = writeln!(file, "{}", serialized) {
-                crashln!("{} Error writing to file.\n{}", *helpers::FAIL, string!(err).white())
-            }
-        } else {
-            if let Err(err) = fs::write(path.clone(), serialized) {
-                crashln!("{} Error writing file.\n{}", *helpers::FAIL, string!(err).white())
-            }
+        // Append to file
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open(&output_path)
+            .unwrap();
+            
+        if let Err(err) = writeln!(file, "{}", serialized) {
+            crashln!("{} Error writing to file.\n{}", *helpers::FAIL, string!(err).white())
         }
-
-        println!("{} Exported process {id} to {path}", *helpers::SUCCESS);
-    };
-
-    match item {
-        Item::Id(id) => fetch_process(*id),
-        Item::Name(name) => match runner.find(&name, &string!("internal")) {
-            Some(id) => fetch_process(id),
-            None => crashln!("{} Process ({name}) not found", *helpers::FAIL),
-        },
     }
+
+    println!("{} Exported {} process(es) to {}", *helpers::SUCCESS, count, output_path);
 }

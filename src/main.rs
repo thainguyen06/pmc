@@ -61,8 +61,8 @@ enum Commands {
     /// Export environment file from process
     #[command(visible_alias = "get")]
     Export {
-        #[clap(value_parser = cli::validate::<Item>)]
-        item: Item,
+        #[clap(value_parser = cli::validate_items)]
+        items: Items,
         /// Path to export file
         path: Option<String>,
     },
@@ -231,7 +231,7 @@ fn main() {
 
     match &cli.command {
         Commands::Import { path } => cli::import::read_hcl(path),
-        Commands::Export { item, path } => cli::import::export_hcl(item, path),
+        Commands::Export { items, path } => cli::import::export_hcl(items, path),
         Commands::Start { name, args, watch, max_memory, server, reset_env } => cli::start(name, args, watch, max_memory, reset_env, &defaults(server)),
         Commands::Stop { items, server } => cli::stop(items, &defaults(server)),
         Commands::Remove { items, server } => cli::remove(items, &defaults(server)),
