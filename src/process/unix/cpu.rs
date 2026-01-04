@@ -35,9 +35,12 @@ pub fn get_effective_cpu_count() -> f64 {
             if line.starts_with("0::") {
                 // cgroup v2 format: "0::/path/to/cgroup"
                 if let Some(cgroup_path) = line.strip_prefix("0::") {
-                    let cpu_max_path = format!("/sys/fs/cgroup{}/cpu.max", cgroup_path);
-                    if let Some(cpu_count) = read_cgroup_v2_quota(&cpu_max_path) {
-                        return cpu_count;
+                    // Skip if path is empty or just root
+                    if !cgroup_path.is_empty() && cgroup_path != "/" {
+                        let cpu_max_path = format!("/sys/fs/cgroup{}/cpu.max", cgroup_path);
+                        if let Some(cpu_count) = read_cgroup_v2_quota(&cpu_max_path) {
+                            return cpu_count;
+                        }
                     }
                 }
             }
@@ -130,7 +133,9 @@ pub fn get_cpu_percent(pid: u32) -> f64 {
                 let cpu_cores = get_effective_cpu_count();
                 let available_cpu_time = elapsed * cpu_cores;
                 let cpu_percent = (process_diff / available_cpu_time) * 100.0;
-                return cpu_percent.min(100.0 * cpu_cores);
+                // Clamp to 100% - a process can use at most 100% of available CPU
+                // In containers with CPU quota, this means 100% of the quota
+                return cpu_percent.min(100.0);
             }
         }
     }
@@ -194,10 +199,12 @@ pub fn get_cpu_percent_fast(pid: u32) -> f64 {
                             let process_cpu_time = (utime + stime) / clock_ticks;
 
                             // CPU percentage = (CPU time / elapsed time) * 100
-                            let cpu_percent = (process_cpu_time / process_uptime) * 100.0;
+                            // This gives percentage relative to ONE full core
+                            // We then normalize by dividing by available CPUs
+                            let cpu_percent = (process_cpu_time / process_uptime) * 100.0 / num_cpus;
 
-                            // Clamp to reasonable value based on effective CPU count
-                            return cpu_percent.min(100.0 * num_cpus);
+                            // Clamp to 100% - represents full utilization of available CPU
+                            return cpu_percent.min(100.0);
                         }
                     }
                 }
