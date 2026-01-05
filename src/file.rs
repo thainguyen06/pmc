@@ -97,7 +97,10 @@ pub fn logs_with_options(
             }
         }
     } else {
-        println!("{} No logs found in {log_file}", *helpers::FAIL)
+        println!(
+            "{}",
+            format!("[OPM] No logs found in {log_file}").bright_black()
+        )
     }
 }
 

@@ -767,7 +767,10 @@ impl<'i> Internal<'i> {
 
                 if let Ok(log) = logs {
                     if log.lines.is_empty() {
-                        println!("{} No logs found for {}/{kind}", *helpers::FAIL, item.name);
+                        println!(
+                            "{}",
+                            format!("[OPM] No logs found for {}/{kind}", item.name).bright_black()
+                        );
                         continue;
                     }
 
