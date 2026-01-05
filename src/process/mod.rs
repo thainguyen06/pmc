@@ -420,6 +420,16 @@ impl Runner {
                 // Continue with restart even if stop fails - process may already be dead
             }
 
+            // Wait for the process to actually terminate before starting a new one
+            // This prevents conflicts when restarting processes that hold resources (e.g., network connections)
+            let pid_to_check = process.pid;
+            for _ in 0..50 {
+                match unix::NativeProcess::new(pid_to_check as u32) {
+                    Ok(_p) => thread::sleep(Duration::from_millis(100)),
+                    Err(_) => break,
+                }
+            }
+
             if let Err(err) = std::env::set_current_dir(&path) {
                 process.running = false;
                 process.children = vec![];
@@ -592,6 +602,14 @@ impl Runner {
                 kill_children(old_children);
                 if let Err(err) = process_stop(old_pid) {
                     log::warn!("Failed to stop old process during reload: {err}");
+                }
+
+                // Wait for old process to fully terminate to release any held resources
+                for _ in 0..50 {
+                    match unix::NativeProcess::new(old_pid as u32) {
+                        Ok(_p) => thread::sleep(Duration::from_millis(100)),
+                        Err(_) => break,
+                    }
                 }
             }
         }
