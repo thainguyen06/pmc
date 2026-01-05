@@ -1016,6 +1016,10 @@ impl<'i> Internal<'i> {
         println!("\nRestore Summary:\n");
         println!("Successfully restored:\n");
         println!("{}", restored_ids.len());
+        if !failed_ids.is_empty() {
+            println!("\nFailed to restore:\n");
+            println!("{}", failed_ids.len());
+        }
         log!(
             "Restore complete: {} successful, {} failed",
             restored_ids.len(),
