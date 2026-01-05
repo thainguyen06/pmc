@@ -119,7 +119,71 @@ opm get-command myapp
 
 For more command information, check out `opm --help`
 
-### Installation
+## Troubleshooting
+
+### Process Fails to Start or Restart
+
+If you encounter errors when starting or restarting processes:
+
+1. **Check the logs**: OPM provides detailed error messages in the process logs
+   ```bash
+   opm logs <id/name>
+   ```
+
+2. **Common Issues**:
+   - **"Command not found"**: The shell or interpreter (e.g., `node`, `python`) is not in your PATH
+     - Solution: Use the full path to the interpreter or add it to your PATH
+     - Check your configuration: `~/.opm/config.toml`
+   
+   - **"Permission denied"**: The script or shell doesn't have execute permissions
+     - Solution: `chmod +x your-script.sh`
+   
+   - **"Failed to open log file"**: The log directory doesn't exist or lacks write permissions
+     - Solution: Create the directory or check permissions: `~/.opm/logs`
+   
+   - **"Failed to set working directory"**: The process path doesn't exist
+     - Solution: Verify the path exists before starting the process
+
+3. **Node.js Module Not Found**: If you get "module not found" errors in command prompt but it works in bash:
+   - The PATH environment may differ between shells
+   - Solution: Use the full path to `node` in your config or ensure PATH is consistent
+   - Check your shell's environment: `opm env <id>`
+
+### Restore Command Issues
+
+If `opm restore` doesn't work as expected:
+
+1. **Check daemon status**: `opm daemon health`
+2. **Review restore output**: OPM now provides detailed progress during restore
+3. **Check individual process logs**: Some processes may fail while others succeed
+
+### Daemon Not Restarting Processes
+
+If the daemon doesn't restart crashed processes:
+
+1. **Check crash limit**: By default, processes that crash too many times (10) are stopped
+   - Edit `~/.opm/config.toml` to adjust the `restarts` limit under `[daemon]`
+   
+2. **Review daemon logs**: The daemon now logs detailed information about restart attempts
+   
+3. **Reset counters**: Use `opm daemon reset` to reset process IDs if needed
+
+### Environment Variables
+
+OPM automatically loads `.env` files from the process working directory. If environment variables aren't being set:
+
+1. **Check `.env` file location**: Must be in the process working directory
+2. **View current environment**: `opm env <id>`
+3. **Clear and reload**: `opm restart <id> --reset-env`
+
+### Getting Help
+
+- View detailed process information: `opm info <id>`
+- Check daemon health: `opm daemon health`
+- View all processes: `opm list`
+- Check logs with errors only: `opm logs <id> --errors-only`
+
+## Installation
 
 Pre-built binaries for Linux, MacOS, and WSL can be found on the [releases](releases) page.
 
