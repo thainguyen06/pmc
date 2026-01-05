@@ -188,7 +188,7 @@ pub fn health(format: &String) {
     if pid::exists() {
         if let Ok(process_id) = pid::read() {
             // Check if the process is actually running before trying to get its information
-            if pid::running(process_id.get()) {
+            if pid::running(process_id.get::<i32>()) {
                 if let Ok(process) = Process::new(process_id.get::<u32>()) {
                     pid = Some(process.pid() as i32);
                     uptime = Some(pid::uptime().unwrap());
