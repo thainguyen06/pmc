@@ -10,6 +10,7 @@ use std::fs;
 
 #[cfg(not(target_os = "linux"))]
 use nix::{
+    errno::Errno,
     sys::signal::kill,
     unistd::Pid,
 };
@@ -997,7 +998,6 @@ impl<'i> Internal<'i> {
                     #[cfg(not(target_os = "linux"))]
                     {
                         // On non-Linux systems, use kill with signal 0
-                        use nix::errno::Errno;
                         match kill(Pid::from_raw(process.pid as i32), None) {
                             Ok(_) => true,
                             Err(Errno::ESRCH) => false,  // Process doesn't exist
