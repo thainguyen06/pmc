@@ -197,12 +197,14 @@ pub fn health(format: &String) {
                 
                 // Try to get process stats (may fail for detached processes)
                 #[cfg(any(target_os = "linux", target_os = "macos"))]
-                if let Ok(process) = Process::new(process_id.get::<u32>()) {
-                    memory_usage = process.memory_info().ok().map(MemoryInfo::from);
-                    cpu_percent = Some(get_process_cpu_usage_with_children_from_process(
-                        &process,
-                        process_id.get::<i64>(),
-                    ));
+                {
+                    if let Ok(process) = Process::new(process_id.get::<u32>()) {
+                        memory_usage = process.memory_info().ok().map(MemoryInfo::from);
+                        cpu_percent = Some(get_process_cpu_usage_with_children_from_process(
+                            &process,
+                            process_id.get::<i64>(),
+                        ));
+                    }
                 }
             } else {
                 // Process is not running, remove stale PID file
