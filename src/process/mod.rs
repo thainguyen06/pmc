@@ -453,6 +453,8 @@ impl Runner {
                 process.running = false;
                 process.children = vec![];
                 process.crash.crashed = true;
+                then!(dead, process.restarts += 1);
+                then!(dead, process.crash.value += 1);
                 log::error!("Failed to set working directory {:?} for process {} during restart: {}", path, name, err);
                 println!(
                     "{} Failed to set working directory {:?}\nError: {:#?}",
@@ -460,63 +462,66 @@ impl Runner {
                     path,
                     err
                 );
-            } else {
-                // Load environment variables from .env file
-                let dotenv_vars = load_dotenv(&path);
-                let system_env = unix::env();
-
-                // Prepare process environment with dotenv variables having priority
-                let stored_env_vec: Vec<String> = process
-                    .env
-                    .iter()
-                    .map(|(key, value)| format!("{}={}", key, value))
-                    .collect();
-                let mut temp_env =
-                    Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
-                // Add dotenv variables first (highest priority)
-                for (key, value) in &dotenv_vars {
-                    temp_env.push(format!("{}={}", key, value));
-                }
-                // Then add stored environment
-                temp_env.extend(stored_env_vec);
-                // Finally add system environment
-                temp_env.extend(system_env);
-
-                let result = match process_run(ProcessMetadata {
-                    args: config.args,
-                    name: name.clone(),
-                    shell: config.shell,
-                    log_path: config.log_path,
-                    command: script.to_string(),
-                    env: temp_env,
-                }) {
-                    Ok(result) => result,
-                    Err(err) => {
-                        process.running = false;
-                        process.children = vec![];
-                        process.crash.crashed = true;
-                        log::error!("Failed to restart process '{}' (id={}): {}", name, id, err);
-                        println!("{} Failed to restart process '{}' (id={}): {}", *helpers::FAIL, name, id, err);
-                        return self;
-                    }
-                };
-
-                process.pid = result.pid;
-                process.shell_pid = result.shell_pid;
-                process.running = true;
-                process.children = vec![];
-                process.started = Utc::now();
-                process.crash.crashed = false;
-
-                // Merge .env variables into the stored environment (dotenv takes priority)
-                let mut updated_env: Env = env::vars().collect();
-                updated_env.extend(dotenv_vars);
-                process.env.extend(updated_env);
-
-                then!(dead, process.restarts += 1);
-                then!(dead, process.crash.value += 1);
-                then!(!dead, process.crash.value = 0);
+                return self;
             }
+
+            // Load environment variables from .env file
+            let dotenv_vars = load_dotenv(&path);
+            let system_env = unix::env();
+
+            // Prepare process environment with dotenv variables having priority
+            let stored_env_vec: Vec<String> = process
+                .env
+                .iter()
+                .map(|(key, value)| format!("{}={}", key, value))
+                .collect();
+            let mut temp_env =
+                Vec::with_capacity(dotenv_vars.len() + stored_env_vec.len() + system_env.len());
+            // Add dotenv variables first (highest priority)
+            for (key, value) in &dotenv_vars {
+                temp_env.push(format!("{}={}", key, value));
+            }
+            // Then add stored environment
+            temp_env.extend(stored_env_vec);
+            // Finally add system environment
+            temp_env.extend(system_env);
+
+            let result = match process_run(ProcessMetadata {
+                args: config.args,
+                name: name.clone(),
+                shell: config.shell,
+                log_path: config.log_path,
+                command: script.to_string(),
+                env: temp_env,
+            }) {
+                Ok(result) => result,
+                Err(err) => {
+                    process.running = false;
+                    process.children = vec![];
+                    process.crash.crashed = true;
+                    then!(dead, process.restarts += 1);
+                    then!(dead, process.crash.value += 1);
+                    log::error!("Failed to restart process '{}' (id={}): {}", name, id, err);
+                    println!("{} Failed to restart process '{}' (id={}): {}", *helpers::FAIL, name, id, err);
+                    return self;
+                }
+            };
+
+            process.pid = result.pid;
+            process.shell_pid = result.shell_pid;
+            process.running = true;
+            process.children = vec![];
+            process.started = Utc::now();
+            process.crash.crashed = false;
+
+            // Merge .env variables into the stored environment (dotenv takes priority)
+            let mut updated_env: Env = env::vars().collect();
+            updated_env.extend(dotenv_vars);
+            process.env.extend(updated_env);
+
+            then!(dead, process.restarts += 1);
+            then!(dead, process.crash.value += 1);
+            then!(!dead, process.crash.value = 0);
         }
 
         return self;
