@@ -148,6 +148,7 @@ pub fn health(format: &String) {
     let mut uptime: Option<DateTime<Utc>> = None;
     let mut memory_usage: Option<MemoryInfo> = None;
     let mut runner: Runner = file::read_object(global!("opm.dump"));
+    let mut daemon_running = false;
 
     #[derive(Clone, Debug, Tabled)]
     struct Info {
@@ -189,6 +190,7 @@ pub fn health(format: &String) {
         if let Ok(process_id) = pid::read() {
             // Check if the process is actually running before trying to get its information
             if pid::running(process_id.get::<i32>()) {
+                daemon_running = true;
                 if let Ok(process) = Process::new(process_id.get::<u32>()) {
                     pid = Some(process.pid() as i32);
                     uptime = Some(pid::uptime().unwrap());
@@ -235,7 +237,7 @@ pub fn health(format: &String) {
         process_count: runner.count(),
         pid_file: format!("{}  ", global!("opm.pid")),
         status: ColoredString(ternary!(
-            pid::exists(),
+            daemon_running,
             "online".green().bold(),
             "stopped".red().bold()
         )),
