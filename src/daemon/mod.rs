@@ -179,7 +179,7 @@ fn restart_process() {
         // Process crashed - handle restart logic
         let max_restarts = config::read().daemon.restarts;
 
-        if item.crash.value >= max_restarts {
+        if item.crash.value > max_restarts {
             log!("[daemon] process exceeded max crashes", "name" => item.name, "id" => id, "crashes" => item.crash.value);
             println!(
                 "{} Process '{}' (id={}) exceeded max crash limit ({}) - stopping",
