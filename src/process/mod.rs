@@ -559,7 +559,7 @@ impl Runner {
                 watch: _,
                 max_memory: _,
                 ..
-            }  = process.clone();
+            } = process.clone();
 
             // Increment restart counter at the beginning of reload attempt
             // This ensures the counter reflects that a reload was attempted,
@@ -642,7 +642,7 @@ impl Runner {
             process.env.extend(updated_env);
 
             // Update crash counter based on reload type
-            // For crash reloads (dead=true): increment crash counter  
+            // For crash reloads (dead=true): increment crash counter
             // For manual reloads (dead=false): reset crash counter to give process a fresh start
             // In practice, reload() is always called with dead=false, so this resets the counter
             then!(dead, process.crash.value += 1);
