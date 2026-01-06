@@ -93,6 +93,19 @@ fn restart_process() {
         // Determine if we should attempt to restart this process
         let process_running = pid::running(item.pid as i32);
         
+        // Check if we can actually read process stats (CPU, memory, etc.)
+        // If NativeProcess::new_fast() fails, it means the process is dead/inaccessible
+        // even if pid::running() returns true (e.g., zombie, PID reused, permission issue)
+        // This catches processes that would show 0% CPU and 0b memory in the list
+        let process_readable = if process_running {
+            // Try to create NativeProcess to verify we can read the process
+            // Use shell_pid if available, otherwise use the actual pid
+            let pid_to_check = item.shell_pid.unwrap_or(item.pid);
+            Process::new_fast(pid_to_check as u32).is_ok()
+        } else {
+            false
+        };
+        
         // Check if process was recently started (within grace period)
         // This prevents false crash detection when shell processes haven't spawned children yet
         let now = Utc::now();
@@ -106,7 +119,10 @@ fn restart_process() {
         // verify that it still has children.
         // 
         // We already computed current children at line 41, so reuse that value.
-        let child_process_alive = if item.shell_pid.is_some() && process_running {
+        let child_process_alive = if !process_readable {
+            // Process is unreadable - definitely dead
+            false
+        } else if item.shell_pid.is_some() && process_running {
             // This is a shell-spawned process - check if the shell still has children
             // If the shell has no children, the actual process has crashed
             // UNLESS it was just started and needs time to spawn children
