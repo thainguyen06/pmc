@@ -94,7 +94,7 @@ fn restart_process() {
         let process_running = pid::running(item.pid as i32);
         
         // Check if we can actually read process stats (CPU, memory, etc.)
-        // If NativeProcess::new_fast() fails, it means the process is dead/inaccessible
+        // If Process::new_fast() fails, it means the process is dead/inaccessible
         // even if pid::running() returns true (e.g., zombie, PID reused, permission issue)
         // This catches processes that would show 0% CPU and 0b memory in the list
         // Use the same PID selection logic as memory monitoring (line 58)
