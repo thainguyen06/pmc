@@ -443,6 +443,12 @@ impl Runner {
                 path, script, name, ..
             } = process.clone();
 
+            // Increment restart counter at the beginning of restart attempt
+            // This ensures the counter reflects that a restart was attempted,
+            // even if the restart fails partway through.
+            // Note: This only increments when dead=true (crash restart), not for manual restarts.
+            then!(dead, process.restarts += 1);
+
             kill_children(process.children.clone());
             if let Err(err) = process_stop(process.pid) {
                 log::warn!("Failed to stop process {} during restart: {}", process.pid, err);
@@ -459,7 +465,6 @@ impl Runner {
                 process.running = false;
                 process.children = vec![];
                 process.crash.crashed = true;
-                then!(dead, process.restarts += 1);
                 then!(dead, process.crash.value += 1);
                 log::error!("Failed to set working directory {:?} for process {} during restart: {}", path, name, err);
                 println!(
@@ -505,7 +510,6 @@ impl Runner {
                     process.running = false;
                     process.children = vec![];
                     process.crash.crashed = true;
-                    then!(dead, process.restarts += 1);
                     then!(dead, process.crash.value += 1);
                     log::error!("Failed to restart process '{}' (id={}): {}", name, id, err);
                     println!("{} Failed to restart process '{}' (id={}): {}", *helpers::FAIL, name, id, err);
@@ -525,7 +529,9 @@ impl Runner {
             updated_env.extend(dotenv_vars);
             process.env.extend(updated_env);
 
-            then!(dead, process.restarts += 1);
+            // Update crash counter based on restart type
+            // For crash restarts (dead=true): increment crash counter
+            // For manual restarts (dead=false): reset crash counter to give process a fresh start
             then!(dead, process.crash.value += 1);
             then!(!dead, process.crash.value = 0);
         }
@@ -555,11 +561,17 @@ impl Runner {
                 ..
             } = process.clone();
 
+            // Increment restart counter at the beginning of reload attempt
+            // This ensures the counter reflects that a reload was attempted,
+            // even if the reload fails partway through.
+            // Note: This only increments when dead=true (crash reload), not for manual reloads.
+            // In practice, reload() is always called with dead=false, so this won't increment.
+            then!(dead, process.restarts += 1);
+
             if let Err(err) = std::env::set_current_dir(&path) {
                 process.running = false;
                 process.children = vec![];
                 process.crash.crashed = true;
-                then!(dead, process.restarts += 1);
                 then!(dead, process.crash.value += 1);
                 log::error!("Failed to set working directory {:?} for process {} during reload: {}", path, name, err);
                 println!(
@@ -605,7 +617,6 @@ impl Runner {
                     process.running = false;
                     process.children = vec![];
                     process.crash.crashed = true;
-                    then!(dead, process.restarts += 1);
                     then!(dead, process.crash.value += 1);
                     log::error!("Failed to reload process '{}' (id={}): {}", name, id, err);
                     println!("{} Failed to reload process '{}' (id={}): {}", *helpers::FAIL, name, id, err);
@@ -630,7 +641,10 @@ impl Runner {
             updated_env.extend(dotenv_vars);
             process.env.extend(updated_env);
 
-            then!(dead, process.restarts += 1);
+            // Update crash counter based on reload type
+            // For crash reloads (dead=true): increment crash counter
+            // For manual reloads (dead=false): reset crash counter to give process a fresh start
+            // In practice, reload() is always called with dead=false, so this resets the counter
             then!(dead, process.crash.value += 1);
             then!(!dead, process.crash.value = 0);
 
