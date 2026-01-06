@@ -21,7 +21,7 @@ use opm::{
     log,
     process::{
         ItemSingle, Runner, get_process_cpu_usage_with_children_from_process,
-        get_process_memory_with_children, http,
+        get_process_memory_with_children, http, is_pid_alive,
     },
 };
 
@@ -552,8 +552,15 @@ impl<'i> Internal<'i> {
                     None => string!("0b"),
                 };
 
-                let status = if item.running {
+                // Check if process actually exists before reporting as online
+                // A process marked as running but with a non-existent PID should be shown as crashed
+                let process_actually_running = item.running && is_pid_alive(item.pid);
+
+                let status = if process_actually_running {
                     "online   ".green().bold()
+                } else if item.running {
+                    // Process is marked as running but PID doesn't exist - it crashed
+                    "crashed   ".red().bold()
                 } else {
                     match item.crash.crashed {
                         true => "crashed   ",
@@ -1144,8 +1151,15 @@ impl<'i> Internal<'i> {
                         }
                     }
 
-                    let status = if item.running {
+                    // Check if process actually exists before reporting as online
+                    // A process marked as running but with a non-existent PID should be shown as crashed
+                    let process_actually_running = item.running && is_pid_alive(item.pid);
+
+                    let status = if process_actually_running {
                         "online   ".green().bold()
+                    } else if item.running {
+                        // Process is marked as running but PID doesn't exist - it crashed
+                        "crashed   ".red().bold()
                     } else {
                         match item.crash.crashed {
                             true => "crashed   ",

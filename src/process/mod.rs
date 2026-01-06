@@ -287,6 +287,12 @@ fn load_dotenv(path: &PathBuf) -> BTreeMap<String, String> {
     env_vars
 }
 
+/// Check if a process with the given PID is alive
+/// Uses libc::kill with signal 0 to check process existence without sending a signal
+pub fn is_pid_alive(pid: i64) -> bool {
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
 impl Runner {
     pub fn new() -> Self {
         dump::read()
@@ -919,8 +925,15 @@ impl Runner {
                 None => string!("0b"),
             };
 
-            let status = if item.running {
+            // Check if process actually exists before reporting as online
+            // A process marked as running but with a non-existent PID should be shown as crashed
+            let process_actually_running = item.running && is_pid_alive(item.pid);
+            
+            let status = if process_actually_running {
                 string!("online")
+            } else if item.running {
+                // Process is marked as running but PID doesn't exist - it crashed
+                string!("crashed")
             } else {
                 match item.crash.crashed {
                     true => string!("crashed"),
@@ -1067,8 +1080,15 @@ impl ProcessWrapper {
             memory_usage = get_process_memory_with_children(pid_for_monitoring);
         }
 
-        let status = if item.running {
+        // Check if process actually exists before reporting as online
+        // A process marked as running but with a non-existent PID should be shown as crashed
+        let process_actually_running = item.running && is_pid_alive(item.pid);
+        
+        let status = if process_actually_running {
             string!("online")
+        } else if item.running {
+            // Process is marked as running but PID doesn't exist - it crashed
+            string!("crashed")
         } else {
             match item.crash.crashed {
                 true => string!("crashed"),
@@ -1745,5 +1765,50 @@ mod tests {
         let process = runner.info(id).unwrap();
         assert_eq!(process.running, false, "Process should start as not running");
         assert_eq!(process.crash.crashed, false, "Process should start as not crashed");
+    }
+
+    #[test]
+    fn test_status_detection_with_dead_pid() {
+        // Test that processes marked as running but with dead PIDs show as crashed
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+
+        // Use a very high PID that's unlikely to exist
+        let unlikely_pid = i32::MAX as i64 - 1000;
+        
+        let process = Process {
+            id,
+            pid: unlikely_pid,
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_process".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'hello'".to_string(),
+            restarts: 0,
+            running: true, // Marked as running
+            crash: Crash {
+                crashed: false,
+                value: 0,
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+
+        runner.list.insert(id, process);
+
+        // Fetch the process list and check status
+        let processes = runner.fetch();
+        assert_eq!(processes.len(), 1, "Should have one process");
+        
+        // The process is marked as running but the PID doesn't exist
+        // So status should be "crashed", not "online"
+        assert_eq!(processes[0].status, "crashed", 
+            "Process with dead PID should show as crashed, not online");
     }
 }
