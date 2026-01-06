@@ -105,20 +105,22 @@ fn restart_process() {
         // even if pid::running() returns true (e.g., zombie, PID reused, permission issue)
         // Use the same PID selection logic as memory monitoring (line 58)
         let pid_for_monitoring = item.shell_pid.unwrap_or(item.pid);
-        let mut process_readable = process_running && Process::new_fast(pid_for_monitoring as u32).is_ok();
+        let mut process_readable = false;
         
-        // Additional check: detect zombie processes or PIDs that were reused
-        // by checking if memory info is completely unreadable (not just zero, but truly unreadable).
-        // We specifically check if memory_info() fails, which indicates the process is in a bad state.
-        // Note: We do NOT check CPU usage here, as 0% CPU is legitimate for idle processes.
-        // Only check this for processes marked as running and outside the grace period.
-        if item.running && process_readable && !recently_started {
-            // Try to read memory info - if this fails, the process is likely a zombie or PID was reused
-            // We know Process::new_fast succeeded from the check above, so we can safely unwrap
+        if process_running {
+            // Try to create a process handle and check its readability
             if let Ok(process) = Process::new_fast(pid_for_monitoring as u32) {
-                // If memory_info() fails, mark the process as unreadable (indicating bad state)
-                if process.memory_info().is_err() {
-                    process_readable = false;
+                // Process handle created successfully
+                // Additional check: detect zombie processes or PIDs that were reused
+                // by checking if memory info is completely unreadable (not just zero, but truly unreadable).
+                // Note: We do NOT check CPU usage here, as 0% CPU is legitimate for idle processes.
+                // Only check memory readability for processes marked as running and outside the grace period.
+                if item.running && !recently_started {
+                    // If memory_info() fails, the process is likely a zombie or PID was reused
+                    process_readable = process.memory_info().is_ok();
+                } else {
+                    // Within grace period or not marked as running - assume readable
+                    process_readable = true;
                 }
             }
         }
