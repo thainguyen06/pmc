@@ -46,8 +46,10 @@ fn restart_process() {
 
         if !children.is_empty() && children != item.children {
             log!("[daemon] added", "children" => format!("{children:?}"));
+            // Clone once for saving to disk via set_children
             runner.set_children(*id, children.clone()).save();
-            // Update the item's children to reflect the change, so later logic uses fresh data
+            // Clone again to update the snapshot's item.children, so later logic uses fresh data
+            // Both clones are necessary because children is borrowed later in this iteration
             item.children = children.clone();
         }
 
