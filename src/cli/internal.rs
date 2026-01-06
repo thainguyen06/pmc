@@ -1033,6 +1033,8 @@ impl<'i> Internal<'i> {
                         id
                     );
                     log!("Failed to restore process '{}' (id={}) - process is not running", name, id);
+                    // Mark process as crashed so daemon can pick it up for auto-restart
+                    runner.set_crashed(id);
                 }
             } else {
                 failed_ids.push((id, name.clone()));
@@ -1051,11 +1053,6 @@ impl<'i> Internal<'i> {
             runner.reset_counters(*id);
         }
         runner.save();
-
-        if !failed_ids.is_empty() {
-            println!("\nFailed to restore:\n");
-            println!("{}", failed_ids.len());
-        }
         log!(
             "Restore complete: {} successful, {} failed",
             restored_ids.len(),
