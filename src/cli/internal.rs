@@ -990,11 +990,6 @@ impl<'i> Internal<'i> {
         }
 
         log!("Found {} process(es) to restore", processes_to_restore.len());
-        println!(
-            "{} Found {} process(es) to restore",
-            *helpers::SUCCESS,
-            processes_to_restore.len()
-        );
 
         for (id, name, was_running, was_crashed) in processes_to_restore {
             let status_str = if was_crashed {
@@ -1005,13 +1000,6 @@ impl<'i> Internal<'i> {
                 "stopped"
             };
             log!("Restoring process '{}' (id={}, status={})", name, id, status_str);
-            println!(
-                "{} Attempting to restore process '{}' (id={}, status={})...",
-                *helpers::WARN,
-                name,
-                id,
-                status_str
-            );
 
             runner = Internal {
                 id,
@@ -1047,12 +1035,6 @@ impl<'i> Internal<'i> {
                 if process.running && pid_valid {
                     restored_ids.push(id);
                     log!("Successfully restored process '{}' (id={})", name, id);
-                    println!(
-                        "{} Successfully restored process '{}' (id={})",
-                        *helpers::SUCCESS,
-                        name,
-                        id
-                    );
                 } else {
                     failed_ids.push((id, name.clone()));
                     println!(
