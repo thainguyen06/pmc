@@ -664,6 +664,8 @@ impl<'i> Internal<'i> {
             };
 
             // Only count uptime when the process is actually running (not crashed or stopped)
+            // For remote processes, we can't check is_pid_alive() since the PID is on a different machine,
+            // so we trust the server's running and crashed flags instead of checking the PID directly
             let uptime_value = if item.running && !item.crash.crashed {
                 format!("{}", helpers::format_duration(item.started))
             } else {

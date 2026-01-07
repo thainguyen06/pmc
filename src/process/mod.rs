@@ -1470,6 +1470,9 @@ mod tests {
         }
     }
 
+    // Use a PID value that's unlikely to exist in the test environment
+    const UNLIKELY_PID: i64 = i32::MAX as i64 - 1000;
+
     #[test]
     fn test_environment_variables() {
         let mut runner = setup_test_runner();
@@ -1758,13 +1761,10 @@ mod tests {
         // This test verifies the structure is set up correctly for error handling
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-
-        // Use a very high PID that's unlikely to exist
-        let unlikely_pid = i32::MAX as i64 - 1000;
         
         let process = Process {
             id,
-            pid: unlikely_pid,
+            pid: UNLIKELY_PID,
             shell_pid: None,
             env: BTreeMap::new(),
             name: "test_process".to_string(),
@@ -1802,13 +1802,10 @@ mod tests {
         // Test that processes marked as running but with dead PIDs show as crashed
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-
-        // Use a very high PID that's unlikely to exist
-        let unlikely_pid = i32::MAX as i64 - 1000;
         
         let process = Process {
             id,
-            pid: unlikely_pid,
+            pid: UNLIKELY_PID,
             shell_pid: None,
             env: BTreeMap::new(),
             name: "test_process".to_string(),
@@ -1847,16 +1844,13 @@ mod tests {
         // Test that crashed processes show "0s" uptime, not accumulated time
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-
-        // Use a very high PID that's unlikely to exist
-        let unlikely_pid = i32::MAX as i64 - 1000;
         
         // Create a process with a start time in the past
         let past_time = Utc::now() - chrono::Duration::seconds(300); // 5 minutes ago
         
         let process = Process {
             id,
-            pid: unlikely_pid,
+            pid: UNLIKELY_PID,
             shell_pid: None,
             env: BTreeMap::new(),
             name: "test_crashed_process".to_string(),
@@ -1898,16 +1892,13 @@ mod tests {
         // Test that stopped processes also show "0s" uptime
         let mut runner = setup_test_runner();
         let id = runner.id.next();
-
-        // Use a very high PID that's unlikely to exist
-        let unlikely_pid = i32::MAX as i64 - 1000;
         
         // Create a process with a start time in the past
         let past_time = Utc::now() - chrono::Duration::seconds(600); // 10 minutes ago
         
         let process = Process {
             id,
-            pid: unlikely_pid,
+            pid: UNLIKELY_PID,
             shell_pid: None,
             env: BTreeMap::new(),
             name: "test_stopped_process".to_string(),
