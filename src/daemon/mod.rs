@@ -40,6 +40,11 @@ extern "C" fn handle_termination_signal(_: libc::c_int) {
     unsafe { libc::_exit(0) }
 }
 
+extern "C" fn handle_sigpipe(_: libc::c_int) {
+    // Ignore SIGPIPE - this prevents the daemon from crashing when writing to closed stdout/stderr
+    // This can happen when the daemon tries to use println!() after being daemonized
+}
+
 fn restart_process() {
     for (id, item) in Runner::new().items_mut() {
         let mut runner = Runner::new();
@@ -445,7 +450,10 @@ pub fn start(verbose: bool) {
 
         let config = config::read().daemon;
 
-        unsafe { libc::signal(libc::SIGTERM, handle_termination_signal as usize) };
+        unsafe { 
+            libc::signal(libc::SIGTERM, handle_termination_signal as usize);
+            libc::signal(libc::SIGPIPE, handle_sigpipe as usize);
+        };
 
         pid::write(process::id());
         log!("[daemon] new fork", "pid" => process::id());
