@@ -955,6 +955,13 @@ impl Runner {
                 }
             };
 
+            // Only count uptime for processes that are actually running
+            let uptime = if process_actually_running {
+                helpers::format_duration(item.started)
+            } else {
+                string!("0s")
+            };
+
             processes.push(ProcessItem {
                 id,
                 status,
@@ -965,7 +972,7 @@ impl Runner {
                 name: item.name.clone(),
                 start_time: item.started,
                 watch_path: item.watch.path.clone(),
-                uptime: helpers::format_duration(item.started),
+                uptime,
             });
         }
 
@@ -1110,6 +1117,13 @@ impl ProcessWrapper {
             }
         };
 
+        // Only count uptime for processes that are actually running
+        let uptime = if process_actually_running {
+            helpers::format_duration(item.started)
+        } else {
+            string!("0s")
+        };
+
         ItemSingle {
             info: Info {
                 status,
@@ -1118,7 +1132,7 @@ impl ProcessWrapper {
                 name: item.name.clone(),
                 path: item.path.clone(),
                 children: item.children.clone(),
-                uptime: helpers::format_duration(item.started),
+                uptime,
                 command: format!(
                     "{} {} '{}'",
                     config.shell,

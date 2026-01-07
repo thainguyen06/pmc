@@ -609,7 +609,7 @@ impl<'i> Internal<'i> {
                         string!("disabled  ")
                     ),
                     uptime: ternary!(
-                        item.running,
+                        process_actually_running,
                         format!("{}", helpers::format_duration(item.started)),
                         string!("none")
                     ),
@@ -1183,7 +1183,7 @@ impl<'i> Internal<'i> {
                             string!("disabled  ")
                         ),
                         uptime: ternary!(
-                            item.running,
+                            process_actually_running,
                             format!("{}  ", helpers::format_duration(item.started)),
                             string!("none  ")
                         ),
