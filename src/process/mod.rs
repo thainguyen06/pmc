@@ -1283,6 +1283,12 @@ pub fn get_process_memory_with_children(pid: i64) -> Option<MemoryInfo> {
 
 /// Stop the process
 pub fn process_stop(pid: i64) -> Result<(), String> {
+    // Don't attempt to stop invalid PIDs
+    // PID 0 has special meaning (process group) and would kill the daemon
+    if pid <= 0 {
+        return Ok(());
+    }
+    
     let children = process_find_children(pid);
 
     // Stop child processes first
