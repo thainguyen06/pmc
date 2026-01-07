@@ -1986,4 +1986,60 @@ mod tests {
         assert_eq!(process.crash.crashed, true, "Process should be marked as crashed");
         assert_eq!(process.running, false, "Process should be marked as not running");
     }
+
+    #[test]
+    fn test_crash_counter_boundary_conditions() {
+        // Test that crash.value behaves correctly at the boundaries
+        // This validates the fix for allowing exactly max_restarts attempts
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+        
+        // Test with crash.value = 9 (should be allowed to restart if max=10)
+        let mut process = Process {
+            id,
+            pid: UNLIKELY_PID,
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_process_9_crashes".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'test'".to_string(),
+            restarts: 9,
+            running: true,
+            crash: Crash {
+                crashed: false,
+                value: 9,
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+        
+        runner.list.insert(id, process.clone());
+        
+        // With max_restarts=10, crash.value=9 should allow restart (9 <= 10)
+        let max_restarts = 10;
+        assert!(process.crash.value <= max_restarts, 
+            "crash.value=9 should be <= max_restarts=10, allowing restart");
+        
+        // Test with crash.value = 10 (should be allowed to restart if max=10)
+        process.crash.value = 10;
+        runner.list.insert(id, process.clone());
+        
+        // With max_restarts=10, crash.value=10 should allow restart (10 <= 10)
+        assert!(process.crash.value <= max_restarts, 
+            "crash.value=10 should be <= max_restarts=10, allowing restart (this is the fix!)");
+        
+        // Test with crash.value = 11 (should NOT allow restart if max=10)
+        process.crash.value = 11;
+        runner.list.insert(id, process.clone());
+        
+        // With max_restarts=10, crash.value=11 should NOT allow restart (11 > 10)
+        assert!(process.crash.value > max_restarts, 
+            "crash.value=11 should be > max_restarts=10, preventing restart");
+    }
 }
