@@ -341,7 +341,7 @@ pub fn read_object<T: serde::de::DeserializeOwned>(path: String) -> T {
                 retry_count += 1;
                 if retry_count >= max_retries {
                     log!("file::read] Cannot find file: {err}");
-                    println!(
+                    crashln!(
                         "{} Cannot find file.\n{}",
                         *helpers::FAIL,
                         string!(err).white()
@@ -369,7 +369,7 @@ pub fn read_object<T: serde::de::DeserializeOwned>(path: String) -> T {
                 retry_count += 1;
                 if retry_count >= max_retries {
                     log!("[file::parse] Cannot parse file: {err}");
-                    println!(
+                    crashln!(
                         "{} Cannot parse file.\n{}",
                         *helpers::FAIL,
                         string!(err).white()
