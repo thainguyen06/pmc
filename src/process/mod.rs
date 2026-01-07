@@ -753,9 +753,8 @@ impl Runner {
     }
 
     pub fn set_crashed(&mut self, id: usize) -> &mut Self {
-        let process = self.process(id);
-        process.crash.crashed = true;
-        process.running = false;
+        self.process(id).crash.crashed = true;
+        self.process(id).running = false;
         return self;
     }
 
@@ -1953,7 +1952,7 @@ mod tests {
             path: PathBuf::from("/tmp"),
             script: "echo 'hello'".to_string(),
             restarts: 0,
-            running: true, // Start as running
+            running: true,
             crash: Crash {
                 crashed: false,
                 value: 0,
