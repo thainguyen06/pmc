@@ -1044,6 +1044,7 @@ impl<'i> Internal<'i> {
                     log!("Failed to restore process '{}' (id={}) - process is not running", name, id);
                     // Mark process as crashed so daemon can pick it up for auto-restart
                     runner.set_crashed(id);
+                    runner.save();
                 }
             } else {
                 failed_ids.push((id, name.clone()));
