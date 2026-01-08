@@ -1010,7 +1010,7 @@ impl<'i> Internal<'i> {
                 kind: kind.clone(),
                 runner: runner.clone(),
             }
-            .restart(&None, &None, false, true);
+            .restart(&None, &None, false, true, false);
 
             // Check if the restart was successful
             if let Some(process) = runner.info(id) {

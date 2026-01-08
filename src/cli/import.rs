@@ -91,7 +91,7 @@ pub fn read_hcl(path: &String) {
                 let mut p = runner.get(id);
                 p.stop();
                 p.set_env(item.env);
-                p.restart();
+                p.restart(false);
             }
             None => crashln!("{} Failed to write to ({name})", *helpers::FAIL),
         }
