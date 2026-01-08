@@ -878,7 +878,7 @@ impl Runner {
             let process = self.process(id);
             process.running = false;
             process.crash.crashed = false;
-            process.crash.value = 0;
+            // Keep crash.value to preserve crash history - only reset via reset_counters()
             process.children = vec![];
         }
 

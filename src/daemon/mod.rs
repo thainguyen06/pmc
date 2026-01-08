@@ -101,18 +101,19 @@ fn restart_process() {
         // - Otherwise, check using is_pid_alive()
         let process_alive = item.pid > 0 && opm::process::is_pid_alive(item.pid);
         
-        // If process is alive and has been running successfully, reset crash counter
-        // This allows processes to recover from previous crashes if they stay online
+        // If process is alive and has been running successfully, keep monitoring
+        // Note: We no longer auto-reset crash counter here - it persists to show
+        // crash history over time. Only explicit reset (via reset_counters()) will clear it.
         if process_alive && item.running && item.crash.value > 0 {
             // Check if process has been running for at least the grace period
             let uptime_secs = (Utc::now() - item.started).num_seconds();
             if uptime_secs >= STARTUP_GRACE_PERIOD_SECS {
-                // Process has been stable - reset crash counter
-                log!("[daemon] process stable - resetting crash counter", 
-                     "name" => item.name, "id" => id, "uptime_secs" => uptime_secs);
+                // Process has been stable - mark as not crashed but keep crash count
+                log!("[daemon] process stable - clearing crashed flag", 
+                     "name" => item.name, "id" => id, "uptime_secs" => uptime_secs, "crash_count" => item.crash.value);
                 if runner.exists(*id) {
                     let process = runner.process(*id);
-                    process.crash.value = 0;
+                    // Clear crashed flag but keep crash.value to preserve history
                     process.crash.crashed = false;
                     runner.save();
                 }
