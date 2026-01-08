@@ -466,7 +466,37 @@ pub fn start(verbose: bool) {
         global!("opm.daemon.kind")
     );
     match daemon(false, verbose) {
-        Ok(Fork::Parent(_)) => {}
+        Ok(Fork::Parent(_)) => {
+            // Wait for the daemon child to write its PID file and start running
+            // This prevents race conditions where health checks immediately after start show "stopped"
+            let max_wait_ms = 2000; // Wait up to 2 seconds
+            let poll_interval_ms = 50; // Check every 50ms
+            let mut elapsed_ms = 0;
+            
+            while elapsed_ms < max_wait_ms {
+                if pid::exists() {
+                    match pid::read() {
+                        Ok(daemon_pid) => {
+                            if pid::running(daemon_pid.get()) {
+                                // Daemon is running with valid PID
+                                log!("[daemon] verified daemon running", "pid" => daemon_pid.get::<i32>());
+                                return;
+                            }
+                        }
+                        Err(_) => {
+                            // PID file exists but can't be read yet - keep waiting
+                        }
+                    }
+                }
+                sleep(Duration::from_millis(poll_interval_ms));
+                elapsed_ms += poll_interval_ms;
+            }
+            
+            // If we reach here, daemon didn't start within the timeout
+            // Log a warning but don't crash - the daemon might still be starting
+            log!("[daemon] PID file not created within timeout", "max_wait_ms" => max_wait_ms);
+            eprintln!("{} Warning: Daemon PID file not detected within {}ms", *helpers::WARN, max_wait_ms);
+        }
         Ok(Fork::Child) => init(),
         Err(err) => crashln!("{} Daemon creation failed with code {err}", *helpers::FAIL),
     }
