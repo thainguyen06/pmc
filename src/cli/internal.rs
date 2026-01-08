@@ -1048,6 +1048,8 @@ impl<'i> Internal<'i> {
                     );
                     log!("Failed to restore process '{}' (id={}) - process is not running", name, id);
                     // Mark process as crashed so daemon can pick it up for auto-restart
+                    // Keep running=true (set_crashed doesn't change it) so daemon will attempt restart
+                    // Don't increment crash counter here - let the daemon do it when it detects the crash
                     runner.set_crashed(id);
                     runner.save();
                 }
@@ -1061,6 +1063,8 @@ impl<'i> Internal<'i> {
                 );
                 log!("Failed to restore process '{}' (id={}) - process not found", name, id);
                 // Mark process as crashed so daemon can pick it up for auto-restart
+                // Keep running=true (set_crashed doesn't change it) so daemon will attempt restart
+                // Don't increment crash counter here - let the daemon do it when it detects the crash
                 runner.set_crashed(id);
                 runner.save();
             }
