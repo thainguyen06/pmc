@@ -1548,6 +1548,10 @@ mod tests {
 
     // Use a PID value that's unlikely to exist in the test environment
     const UNLIKELY_PID: i64 = i32::MAX as i64 - 1000;
+    
+    // Default max restart attempts from config (config.toml: daemon.restarts = 10)
+    // This matches the default value in config::read() at src/config/mod.rs:54
+    const DEFAULT_MAX_RESTARTS: u64 = 10;
 
     #[test]
     fn test_environment_variables() {
@@ -2405,8 +2409,6 @@ mod tests {
         let mut runner = setup_test_runner();
         let id = runner.id.next();
         
-        let max_restarts = 10u64; // Default max restarts
-        
         let process = Process {
             id,
             pid: 0, // Dead process
@@ -2419,7 +2421,7 @@ mod tests {
             running: true,
             crash: Crash {
                 crashed: false,
-                value: max_restarts, // Already at max
+                value: DEFAULT_MAX_RESTARTS, // Already at max
             },
             watch: Watch {
                 enabled: false,
@@ -2435,7 +2437,7 @@ mod tests {
         
         // Simulate daemon detecting one more crash (exceeding max)
         let process = runner.process(id);
-        process.crash.value += 1; // Now at max_restarts + 1
+        process.crash.value += 1; // Now at DEFAULT_MAX_RESTARTS + 1
         
         // When max is exceeded, daemon should set running=false and crashed=true
         process.running = false;
@@ -2443,8 +2445,8 @@ mod tests {
         
         // Verify process state
         let process = runner.info(id).unwrap();
-        assert_eq!(process.crash.value, max_restarts + 1, 
-            "Crash counter should be max_restarts + 1");
+        assert_eq!(process.crash.value, DEFAULT_MAX_RESTARTS + 1, 
+            "Crash counter should be DEFAULT_MAX_RESTARTS + 1");
         assert_eq!(process.running, false, 
             "Process should have running=false after exceeding max crashes");
         assert_eq!(process.crash.crashed, true, 
