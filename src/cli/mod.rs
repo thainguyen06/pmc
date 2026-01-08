@@ -75,7 +75,7 @@ pub fn start(
                     kind: kind.clone(),
                     runner: runner.clone(),
                 }
-                .restart(name, watch, *reset_env, true);
+                .restart(name, watch, *reset_env, true, false);  // start all - don't increment
             }
         }
     } else {
@@ -87,7 +87,7 @@ pub fn start(
                     server_name,
                     kind,
                 }
-                .restart(name, watch, *reset_env, false);
+                .restart(name, watch, *reset_env, false, false);  // start by id - don't increment
             }
             Args::Script(script) => match runner.find(&script, server_name) {
                 Some(id) => {
@@ -97,7 +97,7 @@ pub fn start(
                         server_name,
                         kind,
                     }
-                    .restart(name, watch, *reset_env, false);
+                    .restart(name, watch, *reset_env, false, false);  // start existing - don't increment
                 }
                 None => {
                     Internal {
@@ -350,7 +350,7 @@ pub fn restart(items: &Items, server_name: &String) {
                     kind: kind.clone(),
                     runner: runner.clone(),
                 }
-                .restart(&None, &None, false, true);
+                .restart(&None, &None, false, true, true);  // restart all - increment counter
             }
         }
     } else {
@@ -363,7 +363,7 @@ pub fn restart(items: &Items, server_name: &String) {
                         kind: kind.clone(),
                         runner: runner.clone(),
                     }
-                    .restart(&None, &None, false, false);
+                    .restart(&None, &None, false, false, true);  // restart by id - increment counter
                 }
                 Item::Name(name) => match runner.find(&name, server_name) {
                     Some(id) => {
@@ -373,7 +373,7 @@ pub fn restart(items: &Items, server_name: &String) {
                             kind: kind.clone(),
                             runner: runner.clone(),
                         }
-                        .restart(&None, &None, false, false);
+                        .restart(&None, &None, false, false, true);  // restart by name - increment counter
                     }
                     None => crashln!("{} Process ({name}) not found", *helpers::FAIL),
                 },

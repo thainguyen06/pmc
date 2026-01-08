@@ -168,6 +168,7 @@ impl<'i> Internal<'i> {
         watch: &Option<String>,
         reset_env: bool,
         silent: bool,
+        increment_counter: bool,
     ) -> Runner {
         then!(
             !silent,
@@ -191,7 +192,7 @@ impl<'i> Internal<'i> {
 
             name.as_ref()
                 .map(|n| item.rename(n.trim().replace("\n", "")));
-            item.restart();
+            item.restart(increment_counter);
 
             self.runner = item.get_runner().clone();
             self.runner.save();
@@ -209,7 +210,7 @@ impl<'i> Internal<'i> {
 
                         name.as_ref()
                             .map(|n| item.rename(n.trim().replace("\n", "")));
-                        item.restart();
+                        item.restart(increment_counter);
                     }
                     None => crashln!(
                         "{} Failed to connect (name={}, address={})",
@@ -253,7 +254,7 @@ impl<'i> Internal<'i> {
 
         if matches!(self.server_name, "internal" | "local") {
             let mut item = self.runner.get(self.id);
-            item.reload();
+            item.reload(true);  // Reload command should increment counter
             self.runner = item.get_runner().clone();
             self.runner.save();
         } else {
@@ -265,7 +266,7 @@ impl<'i> Internal<'i> {
                 match Runner::connect(self.server_name.into(), server.get(), false) {
                     Some(remote) => {
                         let mut item = remote.get(self.id);
-                        item.reload();
+                        item.reload(true);  // Reload command should increment counter
                     }
                     None => crashln!(
                         "{} Failed to connect (name={}, address={})",

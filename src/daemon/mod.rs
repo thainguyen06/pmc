@@ -89,7 +89,7 @@ fn restart_process() {
 
             if hash != item.watch.hash {
                 log!("[daemon] watch triggered reload", "name" => item.name, "id" => id);
-                runner.restart(*id, false);
+                runner.restart(*id, false, true);  // Watch reload should increment counter
                 runner.save();
                 log!("[daemon] watch reload complete", "name" => item.name, "id" => id);
                 continue;
@@ -101,18 +101,19 @@ fn restart_process() {
         // - Otherwise, check using is_pid_alive()
         let process_alive = item.pid > 0 && opm::process::is_pid_alive(item.pid);
         
-        // If process is alive and has been running successfully, reset crash counter
-        // This allows processes to recover from previous crashes if they stay online
+        // If process is alive and has been running successfully, keep monitoring
+        // Note: We no longer auto-reset crash counter here - it persists to show
+        // crash history over time. Only explicit reset (via reset_counters()) will clear it.
         if process_alive && item.running && item.crash.value > 0 {
             // Check if process has been running for at least the grace period
             let uptime_secs = (Utc::now() - item.started).num_seconds();
             if uptime_secs >= STARTUP_GRACE_PERIOD_SECS {
-                // Process has been stable - reset crash counter
-                log!("[daemon] process stable - resetting crash counter", 
-                     "name" => item.name, "id" => id, "uptime_secs" => uptime_secs);
+                // Process has been stable - mark as not crashed but keep crash count
+                log!("[daemon] process stable - clearing crashed flag", 
+                     "name" => item.name, "id" => id, "uptime_secs" => uptime_secs, "crash_count" => item.crash.value);
                 if runner.exists(*id) {
                     let process = runner.process(*id);
-                    process.crash.value = 0;
+                    // Clear crashed flag but keep crash.value to preserve history
                     process.crash.crashed = false;
                     runner.save();
                 }
@@ -162,7 +163,7 @@ fn restart_process() {
                     // Pass dead=true so restart() knows this is a crash restart
                     // restart() will increment restarts counter and handle the restart logic
                     let restart_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                        runner.restart(*id, true);
+                        runner.restart(*id, true, true);  // Crash restart should increment counter
                         runner.save();
                     }));
                     
@@ -204,23 +205,36 @@ fn restart_process() {
                     log!("[daemon] max restarts reached", "name" => item.name, "id" => id, 
                          "crashes" => current_crash_value);
                     println!(
-                        "{} Process '{}' (id={}) exceeded max crash limit ({}) - stopping",
+                        "{} Process '{}' (id={}) exceeded max crash limit ({}) - stopping auto-restart",
                         *helpers::FAIL,
                         item.name,
                         id,
                         max_restarts
                     );
+                    println!(
+                        "   Use 'opm start {}' or 'opm restart {}' to manually restart the process",
+                        id,
+                        id
+                    );
                     
                     // Set running to false and mark as crashed
                     process.running = false;
                     process.crash.crashed = true;
-                    // Reset crash counter for next manual start (as per requirements)
-                    process.crash.value = 0;
+                    // Keep crash.value so users can see how many times it crashed
+                    // This will be reset to 0 when the user manually restarts the process
                     
                     runner.save();
                 }
             } else {
-                // Process was already stopped, just update PID
+                // Process was already stopped (running=false), just update PID
+                // This can happen if:
+                // 1. User manually stopped the process
+                // 2. Process previously hit max crash limit and running was set to false
+                if item.crash.crashed {
+                    log!("[daemon] skipping crashed process - running=false", "name" => item.name, "id" => id, 
+                         "crashed" => item.crash.crashed, "crash_value" => item.crash.value);
+                    // Don't print anything to avoid spam - user already knows it's crashed
+                }
                 runner.save();
             }
         }

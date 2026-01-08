@@ -659,7 +659,7 @@ pub async fn rename_handler(id: usize, body: String, _t: Token) -> Result<Json<A
             HTTP_COUNTER.inc();
             let mut item = runner.get(id);
             item.rename(body.trim().replace("\n", ""));
-            then!(process.running, item.restart());
+            then!(process.running, item.restart(true));  // API rename+restart should increment
             timer.observe_duration();
             Ok(Json(attempt(true, "rename")))
         }
@@ -722,13 +722,18 @@ pub async fn action_handler(id: usize, body: Json<ActionBody>, _t: Token) -> Res
     if runner.exists(id) {
         HTTP_COUNTER.inc();
         match method {
-            "start" | "restart" => {
-                runner.get(id).restart();
+            "start" => {
+                runner.get(id).restart(false);  // start should not increment
+                timer.observe_duration();
+                Ok(Json(attempt(true, method)))
+            }
+            "restart" => {
+                runner.get(id).restart(true);  // restart should increment
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
             "reload" => {
-                runner.get(id).reload();
+                runner.get(id).reload(true);  // reload should increment
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
