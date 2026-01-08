@@ -561,15 +561,10 @@ impl Runner {
             updated_env.extend(dotenv_vars);
             process.env.extend(updated_env);
 
-            // Reset crash counter only for manual restarts (dead=false).
-            // For crash restarts (dead=true), keep the counter - it's managed by the daemon
-            // which increments it when a crash is detected and only resets it when the
-            // process runs successfully for some time.
-            // This prevents the counter from being reset prematurely when a process
-            // crashes immediately after a "successful" restart.
-            if !dead {
-                process.crash.value = 0;
-            }
+            // Don't reset crash counter - keep it to preserve crash history
+            // The daemon will reset it automatically after the process runs successfully
+            // for the grace period (1 second), which provides better visibility into
+            // process stability over time.
             
             // Restore the original working directory to avoid affecting the daemon
             if let Some(dir) = original_dir {
@@ -706,12 +701,10 @@ impl Runner {
             updated_env.extend(dotenv_vars);
             process.env.extend(updated_env);
 
-            // Reset crash counter only for manual reloads (dead=false).
-            // For crash reloads (dead=true), keep the counter - it's managed by the daemon.
-            // Note: In practice, reload() is always called with dead=false.
-            if !dead {
-                process.crash.value = 0;
-            }
+            // Don't reset crash counter - keep it to preserve crash history
+            // The daemon will reset it automatically after the process runs successfully
+            // for the grace period (1 second), which provides better visibility into
+            // process stability over time.
 
             // Now stop the old process after the new one is running
             kill_children(old_children);
