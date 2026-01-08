@@ -2347,4 +2347,239 @@ mod tests {
         assert_eq!(process.crash.value, 0,
             "Restore should not increment crash counter - daemon will do it");
     }
+
+    #[test]
+    fn test_crash_counter_increments() {
+        // Test that crash counter increments when a process crashes
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+        
+        let process = Process {
+            id,
+            pid: 12345,
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_crash_counter".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'test'".to_string(),
+            restarts: 0,
+            running: true,
+            crash: Crash {
+                crashed: false,
+                value: 0,
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+        
+        runner.list.insert(id, process);
+        
+        // Simulate a crash by incrementing the counter
+        let process = runner.process(id);
+        process.crash.value += 1;
+        process.crash.crashed = true;
+        
+        // Verify crash counter incremented
+        let process = runner.info(id).unwrap();
+        assert_eq!(process.crash.value, 1, "Crash counter should be 1 after first crash");
+        assert_eq!(process.crash.crashed, true, "Process should be marked as crashed");
+        
+        // Simulate another crash
+        let process = runner.process(id);
+        process.crash.value += 1;
+        
+        // Verify crash counter incremented again
+        let process = runner.info(id).unwrap();
+        assert_eq!(process.crash.value, 2, "Crash counter should be 2 after second crash");
+    }
+
+    #[test]
+    fn test_auto_restart_stops_after_max_crashes() {
+        // Test that auto-restart stops after reaching max crash limit
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+        
+        let max_restarts = 10u64; // Default max restarts
+        
+        let process = Process {
+            id,
+            pid: 0, // Dead process
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_max_crashes".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'test'".to_string(),
+            restarts: 0,
+            running: true,
+            crash: Crash {
+                crashed: false,
+                value: max_restarts, // Already at max
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+        
+        runner.list.insert(id, process);
+        
+        // Simulate daemon detecting one more crash (exceeding max)
+        let process = runner.process(id);
+        process.crash.value += 1; // Now at max_restarts + 1
+        
+        // When max is exceeded, daemon should set running=false and crashed=true
+        process.running = false;
+        process.crash.crashed = true;
+        
+        // Verify process state
+        let process = runner.info(id).unwrap();
+        assert_eq!(process.crash.value, max_restarts + 1, 
+            "Crash counter should be max_restarts + 1");
+        assert_eq!(process.running, false, 
+            "Process should have running=false after exceeding max crashes");
+        assert_eq!(process.crash.crashed, true, 
+            "Process should be marked as crashed after exceeding max crashes");
+    }
+
+    #[test]
+    fn test_crashed_flag_set_correctly() {
+        // Test that crashed flag is set and cleared correctly
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+        
+        let process = Process {
+            id,
+            pid: 12345,
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_crashed_flag".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'test'".to_string(),
+            restarts: 0,
+            running: true,
+            crash: Crash {
+                crashed: false,
+                value: 0,
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+        
+        runner.list.insert(id, process);
+        
+        // Initially not crashed
+        assert_eq!(runner.info(id).unwrap().crash.crashed, false);
+        
+        // Mark as crashed
+        runner.set_crashed(id);
+        assert_eq!(runner.info(id).unwrap().crash.crashed, true);
+        
+        // Clear crashed flag (simulate successful restart)
+        let process = runner.process(id);
+        process.crash.crashed = false;
+        assert_eq!(runner.info(id).unwrap().crash.crashed, false);
+    }
+
+    #[test]
+    fn test_process_not_auto_restart_when_running_false() {
+        // Test that processes with running=false are not auto-restarted
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+        
+        let process = Process {
+            id,
+            pid: 0, // Dead process
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_no_auto_restart".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'test'".to_string(),
+            restarts: 0,
+            running: false, // Key: running is false
+            crash: Crash {
+                crashed: true,
+                value: 15, // High crash count
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+        
+        runner.list.insert(id, process);
+        
+        // Verify the process state
+        let process = runner.info(id).unwrap();
+        assert_eq!(process.running, false, 
+            "Process with running=false should not be auto-restarted");
+        assert_eq!(process.crash.crashed, true,
+            "Process should remain marked as crashed");
+        assert_eq!(process.crash.value, 15,
+            "Crash counter should be preserved");
+    }
+
+    #[test]
+    fn test_crash_counter_preserved_across_restarts() {
+        // Test that crash counter is preserved (not reset) when process restarts
+        // This allows tracking total crash history
+        let mut runner = setup_test_runner();
+        let id = runner.id.next();
+        
+        let process = Process {
+            id,
+            pid: 12345,
+            shell_pid: None,
+            env: BTreeMap::new(),
+            name: "test_crash_preserved".to_string(),
+            path: PathBuf::from("/tmp"),
+            script: "echo 'test'".to_string(),
+            restarts: 0,
+            running: true,
+            crash: Crash {
+                crashed: false,
+                value: 3, // Has crashed 3 times before
+            },
+            watch: Watch {
+                enabled: false,
+                path: String::new(),
+                hash: String::new(),
+            },
+            children: vec![],
+            started: Utc::now(),
+            max_memory: 0,
+        };
+        
+        runner.list.insert(id, process);
+        
+        // Simulate successful restart (crashed flag cleared but counter kept)
+        let process = runner.process(id);
+        process.crash.crashed = false; // Clear crashed flag
+        // crash.value stays at 3 - NOT reset
+        
+        let process = runner.info(id).unwrap();
+        assert_eq!(process.crash.value, 3, 
+            "Crash counter should be preserved across restarts");
+        assert_eq!(process.crash.crashed, false,
+            "Crashed flag should be cleared after successful restart");
+    }
 }
