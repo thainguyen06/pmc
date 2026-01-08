@@ -89,7 +89,7 @@ fn restart_process() {
 
             if hash != item.watch.hash {
                 log!("[daemon] watch triggered reload", "name" => item.name, "id" => id);
-                runner.restart(*id, false);
+                runner.restart(*id, false, true);  // Watch reload should increment counter
                 runner.save();
                 log!("[daemon] watch reload complete", "name" => item.name, "id" => id);
                 continue;
@@ -162,7 +162,7 @@ fn restart_process() {
                     // Pass dead=true so restart() knows this is a crash restart
                     // restart() will increment restarts counter and handle the restart logic
                     let restart_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                        runner.restart(*id, true);
+                        runner.restart(*id, true, true);  // Crash restart should increment counter
                         runner.save();
                     }));
                     
