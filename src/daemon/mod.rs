@@ -11,7 +11,7 @@ use macros_rs::{crashln, str, string, ternary, then};
 use opm::process::{MemoryInfo, unix::NativeProcess as Process};
 use serde::Serialize;
 use serde_json::json;
-use std::{panic, process, thread::sleep, time::Duration};
+use std::{process, thread::sleep, time::Duration};
 
 use opm::{
     config, file,
@@ -118,91 +118,22 @@ fn restart_process() {
                 // Increment consecutive crash counter immediately
                 process.crash.value += 1;
                 
-                let current_crash_value = process.crash.value;
-                let max_restarts = config::read().daemon.restarts;
+                // Mark process as crashed immediately (no automatic restarts)
+                // The process should always report a crashed status after 0 restarts
+                log!("[daemon] marking as crashed", "name" => item.name, "id" => id, 
+                     "crashes" => process.crash.value);
+                println!(
+                    "{} Process '{}' (id={}) crashed - marked as crashed",
+                    *helpers::FAIL,
+                    item.name,
+                    id
+                );
                 
-                // Check if we should retry (crash.value <= max) or give up (crash.value > max)
-                // Using <= to allow exactly max_restarts attempts (e.g., 10 attempts for max_restarts=10)
-                if current_crash_value <= max_restarts {
-                    // RETRY: Attempt restart
-                    log!("[daemon] attempting restart", "name" => item.name, "id" => id, 
-                         "crashes" => current_crash_value, "max" => max_restarts);
-                    println!(
-                        "{} Process '{}' (id={}) crashed - attempting restart (attempt {}/{})",
-                        *helpers::FAIL,
-                        item.name,
-                        id,
-                        current_crash_value,
-                        max_restarts
-                    );
-                    
-                    // Save state with updated crash counter
-                    runner.save();
-                    
-                    // Attempt to restart the crashed process
-                    // Wrap in catch_unwind to prevent daemon crashes from panics in restart logic
-                    // Pass dead=true so restart() knows this is a crash restart
-                    // restart() will increment restarts counter and handle the restart logic
-                    let restart_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                        runner.restart(*id, true);
-                        runner.save();
-                    }));
-                    
-                    if let Err(panic_info) = restart_result {
-                        log!("[daemon] restart panicked", "name" => item.name, "id" => id);
-                        eprintln!("{} Restart panicked for process '{}' (id={}): {:?}", 
-                                  *helpers::FAIL, item.name, id, panic_info);
-                        // Mark as crashed for retry on next cycle
-                        let mut runner = Runner::new();
-                        runner.set_crashed(*id).save();
-                        continue;
-                    }
-                    
-                    // Check if restart succeeded
-                    let restarted_runner = Runner::new();
-                    if let Some(restarted_process) = restarted_runner.info(*id) {
-                        if restarted_process.running && opm::process::is_pid_alive(restarted_process.pid) {
-                            log!("[daemon] restarted successfully", "name" => item.name, "id" => id, 
-                                 "new_pid" => restarted_process.pid);
-                            println!(
-                                "{} Successfully restarted process '{}' (id={})",
-                                *helpers::SUCCESS,
-                                item.name,
-                                id
-                            );
-                        } else {
-                            log!("[daemon] restart failed - process not running", "name" => item.name, "id" => id);
-                            println!(
-                                "{} Failed to restart process '{}' (id={}) - process not running",
-                                *helpers::FAIL,
-                                item.name,
-                                id
-                            );
-                            // Mark as crashed for retry on next cycle
-                            let mut runner = Runner::new();
-                            runner.set_crashed(*id).save();
-                        }
-                    }
-                } else {
-                    // GIVE UP: Max restarts reached
-                    log!("[daemon] max restarts reached", "name" => item.name, "id" => id, 
-                         "crashes" => current_crash_value);
-                    println!(
-                        "{} Process '{}' (id={}) exceeded max crash limit ({}) - stopping",
-                        *helpers::FAIL,
-                        item.name,
-                        id,
-                        max_restarts
-                    );
-                    
-                    // Set running to false and mark as crashed
-                    process.running = false;
-                    process.crash.crashed = true;
-                    // Reset crash counter for next manual start (as per requirements)
-                    process.crash.value = 0;
-                    
-                    runner.save();
-                }
+                // Set running to false and mark as crashed
+                process.running = false;
+                process.crash.crashed = true;
+                
+                runner.save();
             } else {
                 // Process was already stopped, just update PID
                 runner.save();
