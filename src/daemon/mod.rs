@@ -219,8 +219,8 @@ fn restart_process() {
                     // Set running to false and mark as crashed
                     process.running = false;
                     process.crash.crashed = true;
-                    // Reset crash counter for next manual start (as per requirements)
-                    process.crash.value = 0;
+                    // Keep crash.value so users can see how many times it crashed
+                    // This will be reset to 0 when the user manually restarts the process
                     
                     runner.save();
                 }
