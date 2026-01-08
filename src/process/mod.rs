@@ -459,7 +459,11 @@ impl Runner {
             // This ensures the counter reflects that a restart was attempted,
             // even if the restart fails partway through.
             // This counts both manual restarts and automatic crash restarts.
-            process.restarts += 1;
+            // For crash restarts (dead=true), we don't increment here because
+            // the daemon already incremented it before calling this function.
+            if !dead {
+                process.restarts += 1;
+            }
 
             kill_children(process.children.clone());
             if let Err(err) = process_stop(process.pid) {
@@ -608,8 +612,12 @@ impl Runner {
             // Increment restart counter at the beginning of reload attempt
             // This ensures the counter reflects that a reload was attempted,
             // even if the reload fails partway through.
+            // For crash reloads (dead=true), we don't increment here because
+            // the daemon already incremented it before calling this function.
             // This counts both manual reloads and automatic crash reloads.
-            process.restarts += 1;
+            if !dead {
+                process.restarts += 1;
+            }
 
             if let Err(err) = std::env::set_current_dir(&path) {
                 // Restore working directory before returning

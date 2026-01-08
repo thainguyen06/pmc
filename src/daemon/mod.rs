@@ -142,25 +142,32 @@ fn restart_process() {
                 // Check if we should retry (crash.value <= max) or give up (crash.value > max)
                 // Using <= to allow exactly max_restarts attempts (e.g., 10 attempts for max_restarts=10)
                 if current_crash_value <= max_restarts {
+                    // Increment restart counter here in the daemon before attempting restart
+                    // This ensures the counter is incremented even if restart() fails or panics
+                    // This properly counts all restart attempts including failed ones
+                    process.restarts += 1;
+                    
                     // RETRY: Attempt restart
                     log!("[daemon] attempting restart", "name" => item.name, "id" => id, 
-                         "crashes" => current_crash_value, "max" => max_restarts);
+                         "crashes" => current_crash_value, "max" => max_restarts, "restarts" => process.restarts);
                     println!(
-                        "{} Process '{}' (id={}) crashed - attempting restart (attempt {}/{})",
+                        "{} Process '{}' (id={}) crashed - attempting restart (attempt {}/{}, total restarts: {})",
                         *helpers::FAIL,
                         item.name,
                         id,
                         current_crash_value,
-                        max_restarts
+                        max_restarts,
+                        process.restarts
                     );
                     
-                    // Save state with updated crash counter
+                    // Save state with updated crash counter and restart counter
                     runner.save();
                     
                     // Attempt to restart the crashed process
                     // Wrap in catch_unwind to prevent daemon crashes from panics in restart logic
                     // Pass dead=true so restart() knows this is a crash restart
-                    // restart() will increment restarts counter and handle the restart logic
+                    // Note: restart() will NOT increment restarts for crash restarts (dead=true)
+                    // because we already incremented it above
                     let restart_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
                         runner.restart(*id, true);
                         runner.save();
