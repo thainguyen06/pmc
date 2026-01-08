@@ -819,7 +819,8 @@ impl Runner {
 
     pub fn set_crashed(&mut self, id: usize) -> &mut Self {
         self.process(id).crash.crashed = true;
-        self.process(id).running = false;
+        // Keep running=true so daemon will attempt to restart the process
+        // Don't set running=false here - that should only happen when we give up after max retries
         return self;
     }
 
@@ -2011,9 +2012,10 @@ mod tests {
     }
 
     #[test]
-    fn test_set_crashed_marks_process_not_running() {
-        // Test that set_crashed sets both crashed=true and running=false
+    fn test_set_crashed_keeps_running_flag() {
+        // Test that set_crashed sets crashed=true but KEEPS running=true
         // This is critical for daemon auto-restart to work properly
+        // The daemon only attempts restarts for processes where running=true
         let mut runner = setup_test_runner();
         let id = runner.id.next();
         
@@ -2051,10 +2053,10 @@ mod tests {
         // Call set_crashed
         runner.set_crashed(id);
 
-        // Verify that both running and crashed are set correctly
+        // Verify that crashed is set but running remains true for daemon to attempt restart
         let process = runner.info(id).unwrap();
         assert_eq!(process.crash.crashed, true, "Process should be marked as crashed");
-        assert_eq!(process.running, false, "Process should be marked as not running");
+        assert_eq!(process.running, true, "Process should remain marked as running so daemon will restart it");
     }
 
     #[test]
