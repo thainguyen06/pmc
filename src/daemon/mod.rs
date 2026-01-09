@@ -130,9 +130,6 @@ fn restart_process() {
             
             // Only handle crash/restart logic if process was supposed to be running
             if item.running {
-                // Process was supposed to be running but is dead - this is a crash
-                log!("[daemon] detected crash", "name" => item.name, "id" => id, "pid" => item.pid);
-                
                 // Get crash count before modifying
                 let crash_count = {
                     let process = runner.process(*id);
@@ -143,18 +140,11 @@ fn restart_process() {
                     process.crash.value
                 };
                 
+                // Log the crash - don't use println! to avoid potential SIGPIPE issues
+                log!("[daemon] process crashed, continuing to monitor other processes", "name" => item.name, "id" => id, "crash_count" => crash_count);
+                
                 // Save state with updated crash information
                 runner.save();
-                
-                println!(
-                    "{} Process '{}' (id={}) crashed (crash count: {})",
-                    *helpers::FAIL,
-                    item.name,
-                    id,
-                    crash_count
-                );
-                
-                log!("[daemon] process crashed, continuing to monitor other processes", "name" => item.name, "id" => id, "crash_count" => crash_count);
             } else {
                 // Process was already stopped (running=false), just update PID
                 // This can happen if:
