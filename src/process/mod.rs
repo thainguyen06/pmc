@@ -40,9 +40,10 @@ const TERMINATION_CHECK_INTERVAL_MS: u64 = 100;
 /// Returns true if process terminated, false if timeout reached
 fn wait_for_process_termination(pid: i64) -> bool {
     // Don't wait for invalid PIDs - they're already "terminated"
-    // PID 0 signals all processes in current process group
-    // Negative PIDs signal process groups
-    // These are not valid individual process IDs to wait for
+    // PID 0 signals all processes in current process group (not a specific process)
+    // Negative PIDs signal process groups (not individual processes)
+    // PID <= 0 is used internally to indicate "no valid PID" when a process crashes
+    // These are not valid individual process IDs to wait for termination
     if pid <= 0 {
         return true;
     }
@@ -2367,7 +2368,7 @@ mod tests {
         let result = wait_for_process_termination(0);
         let duration = start.elapsed();
         
-        assert_eq!(result, true, "wait_for_process_termination should return true for PID 0");
+        assert!(result, "wait_for_process_termination should return true for PID 0");
         assert!(duration.as_millis() < 100, 
             "wait_for_process_termination(0) should return immediately, took {:?}", duration);
         
@@ -2376,7 +2377,7 @@ mod tests {
         let result = wait_for_process_termination(-1);
         let duration = start.elapsed();
         
-        assert_eq!(result, true, "wait_for_process_termination should return true for negative PID");
+        assert!(result, "wait_for_process_termination should return true for negative PID");
         assert!(duration.as_millis() < 100, 
             "wait_for_process_termination(-1) should return immediately, took {:?}", duration);
         
@@ -2385,7 +2386,7 @@ mod tests {
         let result = wait_for_process_termination(UNLIKELY_PID);
         let duration = start.elapsed();
         
-        assert_eq!(result, true, 
+        assert!(result, 
             "wait_for_process_termination should return true for non-existent PID");
         assert!(duration.as_millis() < 200, 
             "wait_for_process_termination(non-existent) should return quickly, took {:?}", duration);
