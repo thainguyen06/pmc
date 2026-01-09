@@ -152,7 +152,8 @@ fn restart_process() {
                 // Stop the daemon by removing PID file and exiting
                 pid::remove();
                 log!("[daemon] stopped due to process crash", "pid" => process::id());
-                unsafe { libc::_exit(1) }
+                // Use standard exit to allow proper cleanup and destructors to run
+                process::exit(1);
             } else {
                 // Process was already stopped (running=false), just update PID
                 // This can happen if:
