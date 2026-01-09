@@ -60,10 +60,28 @@ fn restart_process() {
         // restarted and the state was saved to disk). This is necessary because
         // operations like restart() modify the state and save it, and we need
         // the latest state for accurate crash detection and restart logic.
-        // This is a trade-off between correctness and performance.
+        // 
+        // Performance considerations:
+        // - Runner::new() loads from disk, which could be expensive
+        // - However, the daemon runs infrequently (default 1000ms interval)
+        // - There are typically few processes, so total overhead is low
+        // - Correctness is prioritized over performance here
+        // 
+        // Alternative approaches considered:
+        // - Caching and selective reload: Complex to implement correctly,
+        //   and the performance gain would be minimal given typical usage
+        // - Using a refresh() method: Would need to be implemented in Runner,
+        //   and would still require reading from disk
         runner = Runner::new();
         
-        // Clone item to avoid borrowing issues when we mutate runner later
+        // Clone item to avoid borrowing issues when we mutate runner later.
+        // This is required by Rust's borrow checker - we can't hold an immutable
+        // reference to runner (via runner.info()) while also calling mutable
+        // methods on runner (e.g., runner.stop(), runner.restart()).
+        // The clone overhead is acceptable given that:
+        // - Process struct is relatively small
+        // - This runs infrequently (daemon interval)
+        // - Correctness is more important than micro-optimizations
         let item = match runner.info(id) {
             Some(item) => item.clone(),
             None => continue, // Process was removed, skip it
