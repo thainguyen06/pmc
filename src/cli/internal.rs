@@ -944,7 +944,6 @@ impl<'i> Internal<'i> {
         }
 
         println!("{} Starting restore process...", *helpers::SUCCESS);
-        log!("Starting restore process");
 
         // Clear log folder before restoring processes
         let config = config::read();
@@ -965,7 +964,6 @@ impl<'i> Internal<'i> {
                         }
                     }
                 }
-                log!("Cleared log folder: {}", log_path);
                 println!("{} Cleared log folder", *helpers::SUCCESS);
             }
         }
@@ -988,11 +986,8 @@ impl<'i> Internal<'i> {
 
         if processes_to_restore.is_empty() {
             println!("{} No processes to restore", *helpers::SUCCESS);
-            log!("No processes to restore");
             return;
         }
-
-        log!("Found {} process(es) to restore", processes_to_restore.len());
 
         for (id, name, was_running, was_crashed) in processes_to_restore {
             let status_str = if was_crashed {
@@ -1002,7 +997,6 @@ impl<'i> Internal<'i> {
             } else {
                 "stopped"
             };
-            log!("Restoring process '{}' (id={}, status={})", name, id, status_str);
 
             runner = Internal {
                 id,
@@ -1037,7 +1031,6 @@ impl<'i> Internal<'i> {
                 
                 if process.running && pid_valid {
                     restored_ids.push(id);
-                    log!("Successfully restored process '{}' (id={})", name, id);
                 } else {
                     failed_ids.push((id, name.clone()));
                     println!(
@@ -1046,7 +1039,6 @@ impl<'i> Internal<'i> {
                         name,
                         id
                     );
-                    log!("Failed to restore process '{}' (id={}) - process is not running", name, id);
                     // Mark process as crashed so daemon can pick it up for auto-restart
                     // Keep running=true (set_crashed doesn't change it) so daemon will attempt restart
                     // Don't increment crash counter here - let the daemon do it when it detects the crash
@@ -1061,7 +1053,6 @@ impl<'i> Internal<'i> {
                     name,
                     id
                 );
-                log!("Failed to restore process '{}' (id={}) - process not found", name, id);
                 // Mark process as crashed so daemon can pick it up for auto-restart
                 // Keep running=true (set_crashed doesn't change it) so daemon will attempt restart
                 // Don't increment crash counter here - let the daemon do it when it detects the crash
@@ -1075,11 +1066,6 @@ impl<'i> Internal<'i> {
             runner.reset_counters(*id);
         }
         runner.save();
-        log!(
-            "Restore complete: {} successful, {} failed",
-            restored_ids.len(),
-            failed_ids.len()
-        );
 
         Internal::list(&string!("default"), &list_name);
     }
