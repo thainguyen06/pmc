@@ -796,6 +796,12 @@ impl Runner {
         &mut self.list
     }
 
+    /// Get an iterator over the process IDs without cloning the entire process map
+    /// This is more efficient than calling items().keys() when you only need the IDs
+    pub fn process_ids(&self) -> impl Iterator<Item = usize> + '_ {
+        self.list.keys().copied()
+    }
+
     pub fn save(&self) {
         then!(self.remote.is_none(), dump::write(&self))
     }

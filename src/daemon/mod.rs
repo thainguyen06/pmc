@@ -50,9 +50,10 @@ fn restart_process() {
     let daemon_config = config::read().daemon;
     
     // Use a single Runner instance to avoid state synchronization issues
-    let mut runner = Runner::new();
+    let runner = Runner::new();
     // Collect IDs first to avoid borrowing issues during iteration
-    let process_ids: Vec<usize> = runner.items().keys().copied().collect();
+    // Use process_ids() instead of items().keys() to avoid cloning all processes
+    let process_ids: Vec<usize> = runner.process_ids().collect();
     
     for id in process_ids {
         // Note: We reload runner at the start of each iteration to ensure we see
@@ -72,7 +73,7 @@ fn restart_process() {
         //   and the performance gain would be minimal given typical usage
         // - Using a refresh() method: Would need to be implemented in Runner,
         //   and would still require reading from disk
-        runner = Runner::new();
+        let mut runner = Runner::new();
         
         // Clone item to avoid borrowing issues when we mutate runner later.
         // This is required by Rust's borrow checker - we can't hold an immutable
