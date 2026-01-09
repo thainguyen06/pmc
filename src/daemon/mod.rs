@@ -161,7 +161,7 @@ fn restart_process() {
                         // Still within crash limit - mark as crashed and save
                         // Next daemon cycle will restart it
                         log!("[daemon] process crashed", 
-                             "name" => item.name, "id" => id, "crash_count" => crash_count);
+                             "name" => item.name, "id" => id, "crash_count" => crash_count, "max_restarts" => daemon_config.restarts);
                         runner.save();
                     }
                 } else {
