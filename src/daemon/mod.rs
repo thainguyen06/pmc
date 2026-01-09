@@ -46,6 +46,9 @@ extern "C" fn handle_sigpipe(_: libc::c_int) {
 }
 
 fn restart_process() {
+    // Load daemon config once at the start to avoid repeated I/O operations
+    let daemon_config = config::read().daemon;
+    
     for (id, item) in Runner::new().items_mut() {
         let mut runner = Runner::new();
         let children = opm::process::process_find_children(item.pid);
@@ -130,7 +133,6 @@ fn restart_process() {
             
             // Only handle crash/restart logic if process was supposed to be running
             if item.running {
-                let config = config::read().daemon;
                 
                 // Check if this is a newly detected crash (not already marked as crashed)
                 // If already crashed, we've already incremented the counter and are waiting for restart
@@ -147,18 +149,22 @@ fn restart_process() {
                     };
                     
                     // Check if we've exceeded the maximum crash limit
-                    if crash_count > config.restarts {
+                    // Using > instead of >= because:
+                    // - crash_count=10 with max_restarts=10: allow restart (10th restart attempt)
+                    // - crash_count=11 with max_restarts=10: give up (exceeded 10 restarts)
+                    // This means "restarts: 10" allows exactly 10 restart attempts
+                    if crash_count > daemon_config.restarts {
                         // Exceeded max restarts - give up and set running=false
                         let process = runner.process(*id);
                         process.running = false;
                         log!("[daemon] process exceeded max crash limit, giving up", 
-                             "name" => item.name, "id" => id, "crash_count" => crash_count, "max_restarts" => config.restarts);
+                             "name" => item.name, "id" => id, "crash_count" => crash_count, "max_restarts" => daemon_config.restarts);
                         runner.save();
                     } else {
                         // Still within crash limit - mark as crashed and save
                         // Next daemon cycle will restart it
                         log!("[daemon] process crashed, will restart next cycle", 
-                             "name" => item.name, "id" => id, "crash_count" => crash_count, "max_restarts" => config.restarts);
+                             "name" => item.name, "id" => id, "crash_count" => crash_count, "max_restarts" => daemon_config.restarts);
                         runner.save();
                     }
                 } else {
