@@ -39,6 +39,15 @@ const TERMINATION_CHECK_INTERVAL_MS: u64 = 100;
 /// for other reasons (permissions, etc.)
 /// Returns true if process terminated, false if timeout reached
 fn wait_for_process_termination(pid: i64) -> bool {
+    // Don't wait for invalid PIDs - they're already "terminated"
+    // PID 0 signals all processes in current process group (not a specific process)
+    // Negative PIDs signal process groups (not individual processes)
+    // PID <= 0 is used internally to indicate "no valid PID" when a process crashes
+    // These are not valid individual process IDs to wait for termination
+    if pid <= 0 {
+        return true;
+    }
+    
     for _ in 0..MAX_TERMINATION_WAIT_ATTEMPTS {
         // Check if process is still running using libc::kill with signal 0
         // This returns 0 if the process exists, -1 if it doesn't (or permission denied)
@@ -2346,5 +2355,40 @@ mod tests {
         // (the daemon will increment it when it detects the crash)
         assert_eq!(process.crash.value, 0,
             "Restore should not increment crash counter - daemon will do it");
+    }
+
+    #[test]
+    fn test_wait_for_process_termination_with_invalid_pids() {
+        use std::time::Instant;
+        
+        // Test that wait_for_process_termination returns immediately for PID 0
+        // Previously, this would cause a 5-second delay because libc::kill(0, 0)
+        // checks the entire process group instead of a specific process
+        let start = Instant::now();
+        let result = wait_for_process_termination(0);
+        let duration = start.elapsed();
+        
+        assert!(result, "wait_for_process_termination should return true for PID 0");
+        assert!(duration.as_millis() < 100, 
+            "wait_for_process_termination(0) should return immediately, took {:?}", duration);
+        
+        // Test with negative PID
+        let start = Instant::now();
+        let result = wait_for_process_termination(-1);
+        let duration = start.elapsed();
+        
+        assert!(result, "wait_for_process_termination should return true for negative PID");
+        assert!(duration.as_millis() < 100, 
+            "wait_for_process_termination(-1) should return immediately, took {:?}", duration);
+        
+        // Test with unlikely PID (should also return quickly since process doesn't exist)
+        let start = Instant::now();
+        let result = wait_for_process_termination(UNLIKELY_PID);
+        let duration = start.elapsed();
+        
+        assert!(result, 
+            "wait_for_process_termination should return true for non-existent PID");
+        assert!(duration.as_millis() < 200, 
+            "wait_for_process_termination(non-existent) should return quickly, took {:?}", duration);
     }
 }
