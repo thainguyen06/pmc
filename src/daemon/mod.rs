@@ -73,6 +73,10 @@ fn restart_process() {
         //   and the performance gain would be minimal given typical usage
         // - Using a refresh() method: Would need to be implemented in Runner,
         //   and would still require reading from disk
+        // 
+        // TODO: Consider implementing Runner::reload() method for future optimization
+        // that only updates changed state rather than full reconstruction from disk.
+        // This would be more efficient but adds complexity.
         let mut runner = Runner::new();
         
         // Clone item to avoid borrowing issues when we mutate runner later.
