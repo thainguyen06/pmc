@@ -250,23 +250,20 @@ fn main() {
         Commands::Stop { items, server } => cli::stop(items, &defaults(server)),
         Commands::Remove { items, server } => cli::remove(items, &defaults(server)),
         Commands::Restore { server } => {
-            // Ensure daemon is running before restore
+            // Ensure daemon is running before restore (silent mode)
             if !daemon::pid::exists() {
-                println!("{} Daemon not running, starting it now...", *opm::helpers::SUCCESS);
                 daemon::start(false);
             } else {
                 // Check if daemon is actually running (not just a stale PID file)
                 match daemon::pid::read() {
                     Ok(pid) => {
                         if !daemon::pid::running(pid.get()) {
-                            println!("{} Daemon not running (stale PID file), starting it now...", *opm::helpers::SUCCESS);
                             daemon::pid::remove();
                             daemon::start(false);
                         }
                     }
                     Err(_) => {
                         // PID file exists but can't be read, remove and start daemon
-                        println!("{} Daemon PID file corrupted, starting daemon...", *opm::helpers::SUCCESS);
                         daemon::pid::remove();
                         daemon::start(false);
                     }

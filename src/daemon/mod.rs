@@ -352,11 +352,13 @@ pub fn stop() {
 }
 
 pub fn start(verbose: bool) {
-    println!(
-        "{} Spawning OPM daemon (opm_base={})",
-        *helpers::SUCCESS,
-        global!("opm.base")
-    );
+    if verbose {
+        println!(
+            "{} Spawning OPM daemon (opm_base={})",
+            *helpers::SUCCESS,
+            global!("opm.base")
+        );
+    }
 
     if pid::exists() {
         match pid::read() {
@@ -400,11 +402,13 @@ pub fn start(verbose: bool) {
         }
     }
 
-    println!(
-        "{} OPM Successfully daemonized (type={})",
-        *helpers::SUCCESS,
-        global!("opm.daemon.kind")
-    );
+    if verbose {
+        println!(
+            "{} OPM Successfully daemonized (type={})",
+            *helpers::SUCCESS,
+            global!("opm.daemon.kind")
+        );
+    }
     match daemon(false, verbose) {
         Ok(Fork::Parent(_)) => {
             // Wait for the daemon child to write its PID file and start running
