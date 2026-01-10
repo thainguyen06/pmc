@@ -96,7 +96,7 @@ pub fn start(
             let worker_name = if let Some(base_name) = name {
                 Some(format!("{}-worker-{}", base_name, i + 1))
             } else {
-                None
+                Some(format!("worker-{}", i + 1))
             };
 
             // Determine port info for display
@@ -116,13 +116,14 @@ pub fn start(
                 port_info
             );
 
+            // Create each worker as a new process
             runner = Internal {
-                id: 0,
+                id: 0,  // 0 means create new process
                 server_name,
                 kind: kind.clone(),
                 runner: runner.clone(),
             }
-            .restart(&worker_name, watch, *reset_env, false, false);
+            .create(&arg.to_string(), &worker_name, watch, &None, true);
         }
 
         println!(
