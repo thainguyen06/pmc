@@ -43,26 +43,31 @@ The `start` command now supports spawning multiple worker instances for load bal
 
 ```bash
 opm start --workers <count> [--port-range <range>] <command>
+# Or use abbreviated flags:
+opm start -w <count> [-p <range>] <command>
 ```
 
 ### Parameters
 
-- `--workers <count>`: Number of worker instances to spawn (minimum 2)
-- `--port-range <range>`: Port allocation for workers
+- `-w, --workers <count>`: Number of worker instances to spawn (minimum 2)
+- `-p, --port-range <range>`: Port allocation for workers
   - Format: `"start-end"` for unique ports per worker (e.g., "3000-3002")
   - Format: `"port"` for shared port using SO_REUSEPORT (e.g., "3000")
 
 ### Examples
 
 ```bash
-# Start 3 workers on different ports
+# Start 3 workers on different ports (long flags)
 opm start --name "web-server" --workers 3 --port-range "3000-3002" "node server.js"
 
+# Start 3 workers on different ports (abbreviated flags)
+opm start --name "web-server" -w 3 -p "3000-3002" "node server.js"
+
 # Start 4 workers using SO_REUSEPORT (all on same port)
-opm start --name "api" --workers 4 --port-range "8080" "python app.py"
+opm start --name "api" -w 4 -p "8080" "python app.py"
 
 # Start workers without specific port configuration
-opm start --name "worker-pool" --workers 5 "node worker.js"
+opm start --name "worker-pool" -w 5 "node worker.js"
 ```
 
 ### Worker Naming
@@ -90,10 +95,11 @@ When using a single port (e.g., `--port-range "3000"`), all workers can bind to 
 
 ## 3. Crash Counter Reset on Restore
 
-The crash counter is automatically reset when processes are restored after a system restart or daemon restore operation. This gives processes a fresh start with full restart attempts available.
+The crash counter is automatically reset for ALL processes when the restore command is run. This gives all processes a fresh start with full restart attempts available.
 
 ### Behavior
 - Occurs automatically during `opm restore` command
 - Resets both `restarts` and `crash.value` counters
-- Applies to all processes being restored
+- Applies to **all processes in the system** (both running and stopped)
+- Ensures every process gets a clean slate after system restore/reboot
 - Already implemented - no user action required
