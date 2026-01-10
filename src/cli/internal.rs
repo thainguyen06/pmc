@@ -1137,14 +1137,13 @@ impl<'i> Internal<'i> {
             }
         }
 
-        // Reset restart and crash counters after restore for ALL processes
+        // Reset restart and crash counters after restore for ALL processes in the system
         // This gives each process a fresh start after system restore/reboot
-        // Both successful and failed processes get their counters reset so they have
-        // full restart attempts available for daemon auto-restart
-        for (id, _, _, _) in &processes_to_restore {
-            if runner.exists(*id) {
-                runner.reset_counters(*id);
-            }
+        // Both running and stopped processes get their counters reset so they have
+        // full restart attempts available
+        let all_process_ids: Vec<usize> = runner.items().keys().copied().collect();
+        for id in all_process_ids {
+            runner.reset_counters(id);
         }
         runner.save();
 

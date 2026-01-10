@@ -89,10 +89,10 @@ enum Commands {
         #[arg(short, long)]
         reset_env: bool,
         /// Number of worker instances to spawn (for load balancing)
-        #[arg(long)]
+        #[arg(short = 'w', long)]
         workers: Option<usize>,
         /// Port range for workers (e.g., "3000-3010" or just "3000" for SO_REUSEPORT)
-        #[arg(long)]
+        #[arg(short = 'p', long)]
         port_range: Option<String>,
     },
     /// Stop/Kill a process
