@@ -191,6 +191,102 @@ pub fn get_parent_pid(pid: i32) -> Result<Option<i32>, String> {
     }
 }
 
+/// Check if a process is a zombie (defunct)
+/// A zombie process is a process that has terminated but still exists in the process table
+/// because its parent hasn't yet read its exit status via wait().
+/// Zombies appear as "defunct" in ps output and have state 'Z' in /proc/PID/stat.
+/// For the purposes of process monitoring, zombies should be treated as dead processes.
+pub fn is_process_zombie(pid: i32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs;
+
+        let stat_path = format!("/proc/{}/stat", pid);
+        if let Ok(stat_content) = fs::read_to_string(&stat_path) {
+            // Parse /proc/pid/stat format: pid (comm) state ...
+            // The state is the third field after splitting by whitespace
+            // However, comm can contain spaces and is enclosed in parentheses
+            // So we need to find the closing parenthesis first
+            if let Some(paren_end) = stat_content.rfind(')') {
+                let after_comm = &stat_content[paren_end + 1..];
+                let parts: Vec<&str> = after_comm.split_whitespace().collect();
+                if !parts.is_empty() {
+                    // First part after comm is the state
+                    return parts[0] == "Z";
+                }
+            }
+        }
+        false
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::mem;
+
+        const PROC_PIDTBSDINFO: i32 = 3;
+        const SZOMB: u32 = 5; // Zombie state on macOS
+
+        #[repr(C)]
+        struct ProcBsdInfo {
+            pbi_flags: u32,
+            pbi_status: u32,
+            pbi_xstatus: u32,
+            pbi_pid: u32,
+            pbi_ppid: u32,
+            pbi_uid: u32,
+            pbi_gid: u32,
+            pbi_ruid: u32,
+            pbi_rgid: u32,
+            pbi_svuid: u32,
+            pbi_svgid: u32,
+            rfu_1: u32,
+            pbi_comm: [libc::c_char; 16],
+            pbi_name: [libc::c_char; 32],
+            pbi_nfiles: u32,
+            pbi_pgid: u32,
+            pbi_pjobc: u32,
+            e_tdev: u32,
+            e_tpgid: u32,
+            pbi_nice: i32,
+            pbi_start_tvsec: u64,
+            pbi_start_tvusec: u64,
+        }
+
+        unsafe extern "C" {
+            fn proc_pidinfo(
+                pid: libc::c_int,
+                flavor: libc::c_int,
+                arg: u64,
+                buffer: *mut libc::c_void,
+                buffersize: libc::c_int,
+            ) -> libc::c_int;
+        }
+
+        let mut proc_info: ProcBsdInfo = unsafe { mem::zeroed() };
+        let result = unsafe {
+            proc_pidinfo(
+                pid,
+                PROC_PIDTBSDINFO,
+                0,
+                &mut proc_info as *mut _ as *mut libc::c_void,
+                mem::size_of::<ProcBsdInfo>() as i32,
+            )
+        };
+
+        if result > 0 {
+            return proc_info.pbi_status == SZOMB;
+        }
+        false
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        // For other Unix systems, we can't easily detect zombies
+        // Default to false (assume not zombie)
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,7 +306,9 @@ mod tests {
 
     #[test]
     fn test_get_parent_pid_invalid() {
-        let invalid_pid = 999999;
+        // Use i32::MAX which is extremely unlikely to be a valid PID on any system
+        // PIDs are typically limited to much smaller values (e.g., 32768 on many Linux systems)
+        let invalid_pid = i32::MAX;
         let result = get_parent_pid(invalid_pid);
         assert!(result.is_err());
     }
@@ -223,5 +321,28 @@ mod tests {
                 assert_eq!(ppid, 0);
             }
         }
+    }
+
+    #[test]
+    fn test_is_process_zombie_current_process() {
+        // Current process should not be a zombie
+        let current_pid = std::process::id() as i32;
+        assert!(!is_process_zombie(current_pid), 
+            "Current process should not be detected as zombie");
+    }
+
+    #[test]
+    fn test_is_process_zombie_nonexistent() {
+        // Use i32::MAX which is extremely unlikely to be a valid PID on any system
+        let invalid_pid = i32::MAX;
+        assert!(!is_process_zombie(invalid_pid), 
+            "Non-existent process should return false for is_process_zombie");
+    }
+
+    #[test]
+    fn test_is_process_zombie_init() {
+        // Init process (PID 1) should not be a zombie
+        assert!(!is_process_zombie(1), 
+            "Init process should not be detected as zombie");
     }
 }

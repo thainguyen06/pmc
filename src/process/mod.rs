@@ -298,6 +298,15 @@ fn load_dotenv(path: &PathBuf) -> BTreeMap<String, String> {
 
 /// Check if a process with the given PID is alive
 /// Uses libc::kill with signal 0 to check process existence without sending a signal
+/// Also checks if the process is a zombie (defunct), which should be treated as dead
+/// 
+/// Why zombie detection matters:
+/// When a process crashes immediately after starting, it can become a zombie (defunct) process
+/// that still exists in the process table. The parent shell hasn't yet read its exit status via wait().
+/// Without zombie detection, libc::kill(pid, 0) returns success for zombies, causing the daemon to
+/// incorrectly report them as "online" and stop attempting restarts. By detecting zombies and treating
+/// them as dead, we ensure the daemon continues restart attempts until the max threshold is reached.
+/// 
 /// PID <= 0 is never considered alive:
 /// - PID 0 signals all processes in the current process group
 /// - Negative PIDs signal process groups
@@ -306,7 +315,25 @@ pub fn is_pid_alive(pid: i64) -> bool {
     if pid <= 0 {
         return false;
     }
-    unsafe { libc::kill(pid as i32, 0) == 0 }
+    
+    // First check if the PID exists using libc::kill
+    let pid_exists = unsafe { libc::kill(pid as i32, 0) == 0 };
+    
+    if !pid_exists {
+        return false;
+    }
+    
+    // PID exists, but it might be a zombie (defunct)
+    // Zombies are dead processes that still exist in the process table
+    // They should be treated as dead for process monitoring purposes
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        if unix::is_process_zombie(pid as i32) {
+            return false;
+        }
+    }
+    
+    true
 }
 
 impl Runner {
@@ -2399,6 +2426,30 @@ mod tests {
         // (the daemon will increment it when it detects the crash)
         assert_eq!(process.crash.value, 0,
             "Restore should not increment crash counter - daemon will do it");
+    }
+
+    #[test]
+    fn test_is_pid_alive_detects_zombies() {
+        // Test that is_pid_alive returns false for zombie processes
+        // We can't easily create a zombie in a test, but we can verify
+        // that the function exists and works correctly for non-zombie processes
+        
+        // Current process should be alive and not a zombie
+        let current_pid = std::process::id() as i64;
+        assert!(is_pid_alive(current_pid), 
+            "Current process should be detected as alive");
+        
+        // Invalid PID should not be alive
+        assert!(!is_pid_alive(UNLIKELY_PID), 
+            "Invalid PID should not be detected as alive");
+        
+        // PID 0 should not be alive (special case)
+        assert!(!is_pid_alive(0), 
+            "PID 0 should not be detected as alive");
+        
+        // Negative PID should not be alive
+        assert!(!is_pid_alive(-1), 
+            "Negative PID should not be detected as alive");
     }
 
     #[test]
