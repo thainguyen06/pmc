@@ -30,7 +30,7 @@ use rocket::{
     State,
 };
 
-use std::{io, path::PathBuf};
+
 
 lazy_static! {
     pub static ref HTTP_COUNTER: Counter = register_counter!(opts!("http_requests_total", "Number of HTTP requests made.")).unwrap();
