@@ -10,6 +10,7 @@ use reqwest::header::HeaderValue;
 use tera::Context;
 use toml;
 use utoipa::ToSchema;
+use serde_json::json;
 
 use rocket::{
     delete,
@@ -1150,4 +1151,142 @@ pub async fn stream_info(server: String, id: usize, _t: Token) -> EventStream![]
             }
         };
     }
+}
+
+// Agent Management Endpoints
+
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(crate = "rocket::serde")]
+pub struct AgentRegisterBody {
+    pub id: String,
+    pub name: String,
+    pub hostname: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(crate = "rocket::serde")]
+pub struct AgentHeartbeatBody {
+    pub id: String,
+}
+
+/// Register a new agent
+#[utoipa::path(
+    post,
+    path = "/daemon/agents/register",
+    request_body = AgentRegisterBody,
+    responses(
+        (status = 200, description = "Agent registered successfully"),
+        (status = 400, description = "Bad request")
+    ),
+    security(("api_key" = []))
+)]
+#[post("/daemon/agents/register", data = "<body>")]
+pub async fn agent_register_handler(
+    body: Json<AgentRegisterBody>,
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<serde_json::Value>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_register"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    let agent_info = opm::agent::types::AgentInfo {
+        id: body.id.clone(),
+        name: body.name.clone(),
+        hostname: body.hostname.clone(),
+        status: opm::agent::types::AgentStatus::Online,
+        connection_type: opm::agent::types::ConnectionType::In,
+        last_seen: std::time::SystemTime::now(),
+        connected_at: std::time::SystemTime::now(),
+    };
+
+    registry.register(agent_info);
+    timer.observe_duration();
+
+    Ok(Json(json!({
+        "success": true,
+        "message": "Agent registered successfully"
+    })))
+}
+
+/// Agent heartbeat
+#[utoipa::path(
+    post,
+    path = "/daemon/agents/heartbeat",
+    request_body = AgentHeartbeatBody,
+    responses(
+        (status = 200, description = "Heartbeat received"),
+        (status = 404, description = "Agent not found")
+    ),
+    security(("api_key" = []))
+)]
+#[post("/daemon/agents/heartbeat", data = "<body>")]
+pub async fn agent_heartbeat_handler(
+    body: Json<AgentHeartbeatBody>,
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<serde_json::Value>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_heartbeat"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    registry.update_heartbeat(&body.id);
+    timer.observe_duration();
+
+    Ok(Json(json!({
+        "success": true,
+        "message": "Heartbeat received"
+    })))
+}
+
+/// List all connected agents
+#[utoipa::path(
+    get,
+    path = "/daemon/agents/list",
+    responses(
+        (status = 200, description = "List of connected agents"),
+    ),
+    security(("api_key" = []))
+)]
+#[get("/daemon/agents/list")]
+pub async fn agent_list_handler(
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<Vec<opm::agent::types::AgentInfo>>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_list"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    let agents = registry.list();
+    timer.observe_duration();
+
+    Ok(Json(agents))
+}
+
+/// Unregister an agent
+#[utoipa::path(
+    delete,
+    path = "/daemon/agents/{id}",
+    params(
+        ("id" = String, Path, description = "Agent ID")
+    ),
+    responses(
+        (status = 200, description = "Agent unregistered successfully"),
+        (status = 404, description = "Agent not found")
+    ),
+    security(("api_key" = []))
+)]
+#[delete("/daemon/agents/<id>")]
+pub async fn agent_unregister_handler(
+    id: String,
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<serde_json::Value>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_unregister"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    registry.unregister(&id);
+    timer.observe_duration();
+
+    Ok(Json(json!({
+        "success": true,
+        "message": "Agent unregistered successfully"
+    })))
 }

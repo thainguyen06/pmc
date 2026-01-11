@@ -66,7 +66,11 @@ lazy_static! {
         routes::metrics_handler,
         routes::prometheus_handler,
         routes::create_handler,
-        routes::rename_handler
+        routes::rename_handler,
+        routes::agent_register_handler,
+        routes::agent_heartbeat_handler,
+        routes::agent_list_handler,
+        routes::agent_unregister_handler,
     ),
     components(schemas(
         ErrorMessage,
@@ -82,6 +86,8 @@ lazy_static! {
         routes::Version,
         routes::ActionBody,
         routes::AddServerBody,
+        routes::AgentRegisterBody,
+        routes::AgentHeartbeatBody,
         routes::ConfigBody,
         routes::CreateBody,
         routes::MetricsRoot,
@@ -172,6 +178,7 @@ pub async fn start(webui: bool) {
 
     let tera = webui::create_templates();
     let s_path = config::read().get_path().trim_end_matches('/').to_string();
+    let agent_registry = opm::agent::registry::AgentRegistry::new();
 
     let routes = rocket::routes![
         embed,
@@ -210,12 +217,17 @@ pub async fn start(webui: bool) {
         routes::prometheus_handler,
         routes::create_handler,
         routes::rename_handler,
+        routes::agent_register_handler,
+        routes::agent_heartbeat_handler,
+        routes::agent_list_handler,
+        routes::agent_unregister_handler,
     ];
 
     let rocket = rocket::custom(config::read().get_address())
         .attach(Logger)
         .attach(AddCORS)
         .manage(TeraState { path: tera.1, tera: tera.0 })
+        .manage(agent_registry)
         .mount(format!("{s_path}/"), routes)
         .register("/", rocket::catchers![internal_error, bad_request, not_allowed, not_found, unauthorized])
         .launch()

@@ -15,7 +15,7 @@ impl AgentConnection {
     pub fn new(config: AgentConfig) -> Self {
         Self {
             config,
-            status: AgentStatus::Disconnected,
+            status: AgentStatus::Offline,
         }
     }
 
@@ -28,7 +28,7 @@ impl AgentConnection {
             match self.connect_websocket().await {
                 Ok(()) => {
                     println!("[Agent] WebSocket connection established");
-                    self.status = AgentStatus::Connected;
+                    self.status = AgentStatus::Online;
                     
                     if let Err(e) = self.handle_websocket().await {
                         eprintln!("[Agent] WebSocket error: {}", e);
@@ -160,13 +160,17 @@ impl AgentConnection {
     }
 
     pub fn get_info(&self) -> AgentInfo {
+        use super::types::ConnectionType;
         AgentInfo {
             id: self.config.id.clone(),
             name: self.config.name.clone(),
+            hostname: hostname::get()
+                .ok()
+                .and_then(|h| h.into_string().ok()),
             status: self.status.clone(),
-            connection_type: "out".to_string(),
+            connection_type: ConnectionType::Out,
             last_seen: std::time::SystemTime::now(),
-            address: Some(self.config.server_url.clone()),
+            connected_at: std::time::SystemTime::now(),
         }
     }
 }
