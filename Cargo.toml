@@ -11,7 +11,17 @@ name = "opm"
 path = "src/main.rs"
 
 [build-dependencies]
+tar = "0.4.41"
 chrono = "0.4.38"
+flate2 = "1.0.31"
+
+[build-dependencies.reqwest]
+version = "0.11.27"
+default-features = false
+features = [
+   "blocking", 
+   "rustls-tls", 
+]
 
 [dependencies]
 ron = "0.8.1"
@@ -22,6 +32,7 @@ toml = "0.8.19"
 clap = "4.5.16"
 cxx = "1.0.126"
 bytes = "1.7.1"
+tera = "1.20.0"
 regex = "1.10.6"
 libc = "0.2.156"
 anyhow = "1.0.86"
