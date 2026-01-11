@@ -2,7 +2,7 @@
 
 ## Overview
 
-OPM (Open Process Management) is a simple PM2 alternative written in Rust. It provides a command-line/api interface to start, stop, restart, and manage fork processes
+OPM (Open Process Management) is a simple PM2 alternative written in Rust. It provides a command-line/api interface to start, stop, restart, and manage fork processes, now with a web UI for easier management!
 
 ## Features
 
@@ -13,6 +13,64 @@ OPM (Open Process Management) is a simple PM2 alternative written in Rust. It pr
 - Retrieve detailed information about a specific process.
 - Get startup commands for processes.
 - Use HTTP/rust api to control processes.
+- **NEW: Web UI for visual process management**
+- **NEW: API server for remote process control**
+
+## Web UI and API Server
+
+OPM now includes a web-based user interface and API server for managing processes remotely.
+
+### Starting the API Server
+
+```bash
+# Start daemon with API only
+opm daemon restore --api
+
+# Start daemon with both API and Web UI
+opm daemon restore --api --webui
+```
+
+### Accessing the Web UI
+
+Once started with `--webui`, you can access the web interface at:
+```
+http://127.0.0.1:9876/
+```
+
+Default configuration:
+- Address: 127.0.0.1
+- Port: 9876
+
+### Configuration
+
+The web server can be configured in `~/.opm/config.toml`:
+
+```toml
+[daemon.web]
+ui = false      # Enable/disable web UI
+api = false     # Enable/disable API server
+address = "127.0.0.1"
+port = 9876
+path = "/"      # Optional: Base path for the API/UI
+
+# Optional: API security
+[daemon.web.secure]
+enabled = true
+token = "your-secret-token"
+```
+
+### API Endpoints
+
+The API server provides REST endpoints for process management:
+
+- `GET /health` - Check server health
+- `GET /daemon/list` - List all processes
+- `GET /daemon/info/{id}` - Get process details
+- `POST /daemon/action` - Control processes (start, stop, restart)
+- `GET /openapi.json` - OpenAPI specification
+- `GET /docs/embed` - Interactive API documentation
+
+For full API documentation, visit `/docs/embed` when the server is running.
 
 ## Usage
 
