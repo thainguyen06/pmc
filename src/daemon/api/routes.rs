@@ -7,9 +7,13 @@ use prometheus::{Encoder, TextEncoder};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use opm::process::unix::NativeProcess as Process;
 use reqwest::header::HeaderValue;
+use tera::Context;
+use toml;
 use utoipa::ToSchema;
+use serde_json::json;
 
 use rocket::{
+    delete,
     get,
     http::{ContentType, Status},
     post,
@@ -20,7 +24,9 @@ use rocket::{
 
 use super::{
     helpers::{generic_error, not_found, GenericError, NotFound},
+    render,
     structs::ErrorMessage,
+    EnableWebUI, TeraState,
 };
 
 use opm::{
@@ -42,6 +48,8 @@ use std::{
     thread::sleep,
     time::Duration,
 };
+
+use home;
 
 pub(crate) struct Token;
 type EnvList = Json<BTreeMap<String, String>>;
@@ -155,6 +163,36 @@ fn attempt(done: bool, method: &str) -> ActionResponse {
     }
 }
 
+// WebUI Routes
+#[get("/")]
+pub async fn dashboard(state: &State<TeraState>, _webui: EnableWebUI) -> Result<(ContentType, String), NotFound> { 
+    Ok((ContentType::HTML, render("dashboard", &state, &mut Context::new()).await?)) 
+}
+
+#[get("/servers")]
+pub async fn servers(state: &State<TeraState>, _webui: EnableWebUI) -> Result<(ContentType, String), NotFound> { 
+    Ok((ContentType::HTML, render("servers", &state, &mut Context::new()).await?)) 
+}
+
+#[get("/login")]
+pub async fn login(state: &State<TeraState>, _webui: EnableWebUI) -> Result<(ContentType, String), NotFound> { 
+    Ok((ContentType::HTML, render("login", &state, &mut Context::new()).await?)) 
+}
+
+#[get("/view/<id>")]
+pub async fn view_process(id: usize, state: &State<TeraState>, _webui: EnableWebUI) -> Result<(ContentType, String), NotFound> {
+    let mut ctx = Context::new();
+    ctx.insert("process_id", &id);
+    Ok((ContentType::HTML, render("view", &state, &mut ctx).await?))
+}
+
+#[get("/status/<name>")]
+pub async fn server_status(name: String, state: &State<TeraState>, _webui: EnableWebUI) -> Result<(ContentType, String), NotFound> {
+    let mut ctx = Context::new();
+    ctx.insert("server_name", &name);
+    Ok((ContentType::HTML, render("status", &state, &mut ctx).await?))
+}
+
 #[get("/daemon/prometheus")]
 #[utoipa::path(get, tag = "Daemon", path = "/daemon/prometheus", security((), ("api_key" = [])),
     responses(
@@ -199,6 +237,105 @@ pub async fn servers_handler(_t: Token) -> Result<Json<Vec<String>>, GenericErro
         Err(generic_error(Status::BadRequest, string!("No servers have been added")))
     }
 }
+
+#[derive(Deserialize, ToSchema)]
+pub struct AddServerBody {
+    pub name: String,
+    pub address: String,
+    pub token: Option<String>,
+}
+
+#[post("/daemon/servers/add", format = "json", data = "<body>")]
+#[utoipa::path(post, tag = "Daemon", path = "/daemon/servers/add", request_body = AddServerBody,
+    security((), ("api_key" = [])),
+    responses(
+        (status = 200, description = "Server added successfully", body = ActionResponse),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn add_server_handler(body: Json<AddServerBody>, _t: Token) -> Json<ActionResponse> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["add_server"]).start_timer();
+    HTTP_COUNTER.inc();
+    
+    let mut servers = config::servers();
+    let server = config::structs::Server {
+        address: body.address.trim_end_matches('/').to_string(),
+        token: body.token.clone(),
+    };
+    
+    if servers.servers.is_none() {
+        servers.servers = Some(BTreeMap::new());
+    }
+    
+    if let Some(ref mut server_map) = servers.servers {
+        server_map.insert(body.name.clone(), server);
+    }
+    
+    // Save to file
+    match home::home_dir() {
+        Some(path) => {
+            let config_path = format!("{}/.opm/servers.toml", path.display());
+            let contents = match toml::to_string(&servers) {
+                Ok(c) => c,
+                Err(_) => return Json(attempt(false, "add_server")),
+            };
+            
+            if let Err(_) = fs::write(&config_path, contents) {
+                return Json(attempt(false, "add_server"));
+            }
+        }
+        None => return Json(attempt(false, "add_server")),
+    }
+    
+    timer.observe_duration();
+    Json(attempt(true, "add_server"))
+}
+
+#[delete("/daemon/servers/<name>")]
+#[utoipa::path(delete, tag = "Daemon", path = "/daemon/servers/{name}",
+    security((), ("api_key" = [])),
+    params(("name" = String, Path, description = "Server name to remove")),
+    responses(
+        (status = 200, description = "Server removed successfully", body = ActionResponse),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn remove_server_handler(name: String, _t: Token) -> Json<ActionResponse> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["remove_server"]).start_timer();
+    HTTP_COUNTER.inc();
+    
+    let mut servers = config::servers();
+    
+    if let Some(ref mut server_map) = servers.servers {
+        server_map.remove(&name);
+    }
+    
+    // Save to file
+    match home::home_dir() {
+        Some(path) => {
+            let config_path = format!("{}/.opm/servers.toml", path.display());
+            let contents = match toml::to_string(&servers) {
+                Ok(c) => c,
+                Err(_) => return Json(attempt(false, "remove_server")),
+            };
+            
+            if let Err(_) = fs::write(&config_path, contents) {
+                return Json(attempt(false, "remove_server"));
+            }
+        }
+        None => return Json(attempt(false, "remove_server")),
+    }
+    
+    timer.observe_duration();
+    Json(attempt(true, "remove_server"))
+}
+
 
 #[get("/remote/<name>/list")]
 #[utoipa::path(get, tag = "Remote", path = "/remote/{name}/list", security((), ("api_key" = [])),
@@ -439,6 +576,59 @@ pub async fn dump_handler(_t: Token) -> Vec<u8> {
     dump::raw()
 }
 
+#[post("/daemon/save")]
+#[utoipa::path(post, tag = "Daemon", path = "/daemon/save", security((), ("api_key" = [])),
+    responses(
+        (status = 200, description = "Save all processes successfully", body = ActionResponse),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn save_handler(_t: Token) -> Json<ActionResponse> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["save"]).start_timer();
+    HTTP_COUNTER.inc();
+    
+    Runner::new().save();
+    
+    timer.observe_duration();
+    Json(attempt(true, "save"))
+}
+
+#[post("/daemon/restore")]
+#[utoipa::path(post, tag = "Daemon", path = "/daemon/restore", security((), ("api_key" = [])),
+    responses(
+        (status = 200, description = "Restore all processes successfully", body = ActionResponse),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn restore_handler(_t: Token) -> Json<ActionResponse> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["restore"]).start_timer();
+    HTTP_COUNTER.inc();
+    
+    let runner = Runner::new();
+    
+    // Collect IDs of processes that were running when saved
+    let running_ids: Vec<usize> = runner.items()
+        .into_iter()
+        .filter(|(_, item)| item.running)
+        .map(|(_, item)| item.id)
+        .collect();
+    
+    // Restore those processes
+    let mut runner = Runner::new();
+    for id in running_ids {
+        runner.restart(id, false, false);
+    }
+    
+    timer.observe_duration();
+    Json(attempt(true, "restore"))
+}
+
 #[get("/daemon/config")]
 #[utoipa::path(get, tag = "Daemon", path = "/daemon/config", security((), ("api_key" = [])),
     responses(
@@ -627,7 +817,7 @@ pub async fn create_handler(body: Json<CreateBody>, _t: Token) -> Result<Json<Ac
         None => string!(body.script.split_whitespace().next().unwrap_or_default()),
     };
 
-    runner.start(&name, &body.script, body.path.clone(), &body.watch).save();
+    runner.start(&name, &body.script, body.path.clone(), &body.watch, 0).save();
     timer.observe_duration();
 
     Ok(Json(attempt(true, "create")))
@@ -961,4 +1151,142 @@ pub async fn stream_info(server: String, id: usize, _t: Token) -> EventStream![]
             }
         };
     }
+}
+
+// Agent Management Endpoints
+
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(crate = "rocket::serde")]
+pub struct AgentRegisterBody {
+    pub id: String,
+    pub name: String,
+    pub hostname: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(crate = "rocket::serde")]
+pub struct AgentHeartbeatBody {
+    pub id: String,
+}
+
+/// Register a new agent
+#[utoipa::path(
+    post,
+    path = "/daemon/agents/register",
+    request_body = AgentRegisterBody,
+    responses(
+        (status = 200, description = "Agent registered successfully"),
+        (status = 400, description = "Bad request")
+    ),
+    security(("api_key" = []))
+)]
+#[post("/daemon/agents/register", data = "<body>")]
+pub async fn agent_register_handler(
+    body: Json<AgentRegisterBody>,
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<serde_json::Value>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_register"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    let agent_info = opm::agent::types::AgentInfo {
+        id: body.id.clone(),
+        name: body.name.clone(),
+        hostname: body.hostname.clone(),
+        status: opm::agent::types::AgentStatus::Online,
+        connection_type: opm::agent::types::ConnectionType::In,
+        last_seen: std::time::SystemTime::now(),
+        connected_at: std::time::SystemTime::now(),
+    };
+
+    registry.register(agent_info);
+    timer.observe_duration();
+
+    Ok(Json(json!({
+        "success": true,
+        "message": "Agent registered successfully"
+    })))
+}
+
+/// Agent heartbeat
+#[utoipa::path(
+    post,
+    path = "/daemon/agents/heartbeat",
+    request_body = AgentHeartbeatBody,
+    responses(
+        (status = 200, description = "Heartbeat received"),
+        (status = 404, description = "Agent not found")
+    ),
+    security(("api_key" = []))
+)]
+#[post("/daemon/agents/heartbeat", data = "<body>")]
+pub async fn agent_heartbeat_handler(
+    body: Json<AgentHeartbeatBody>,
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<serde_json::Value>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_heartbeat"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    registry.update_heartbeat(&body.id);
+    timer.observe_duration();
+
+    Ok(Json(json!({
+        "success": true,
+        "message": "Heartbeat received"
+    })))
+}
+
+/// List all connected agents
+#[utoipa::path(
+    get,
+    path = "/daemon/agents/list",
+    responses(
+        (status = 200, description = "List of connected agents"),
+    ),
+    security(("api_key" = []))
+)]
+#[get("/daemon/agents/list")]
+pub async fn agent_list_handler(
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<Vec<opm::agent::types::AgentInfo>>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_list"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    let agents = registry.list();
+    timer.observe_duration();
+
+    Ok(Json(agents))
+}
+
+/// Unregister an agent
+#[utoipa::path(
+    delete,
+    path = "/daemon/agents/{id}",
+    params(
+        ("id" = String, Path, description = "Agent ID")
+    ),
+    responses(
+        (status = 200, description = "Agent unregistered successfully"),
+        (status = 404, description = "Agent not found")
+    ),
+    security(("api_key" = []))
+)]
+#[delete("/daemon/agents/<id>")]
+pub async fn agent_unregister_handler(
+    id: String,
+    registry: &State<opm::agent::registry::AgentRegistry>,
+    _t: Token,
+) -> Result<Json<serde_json::Value>, NotFound> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_unregister"]).start_timer();
+    HTTP_COUNTER.inc();
+
+    registry.unregister(&id);
+    timer.observe_duration();
+
+    Ok(Json(json!({
+        "success": true,
+        "message": "Agent unregistered successfully"
+    })))
 }

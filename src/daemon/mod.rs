@@ -1,7 +1,9 @@
 #[macro_use]
 mod log;
+mod api;
 mod fork;
 
+use api::{DAEMON_CPU_PERCENTAGE, DAEMON_MEM_USAGE, DAEMON_START_TIME};
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use fork::{Fork, daemon};
@@ -11,9 +13,11 @@ use macros_rs::{crashln, str, string, ternary, then};
 use opm::process::{MemoryInfo, unix::NativeProcess as Process};
 use serde::Serialize;
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{process, thread::sleep, time::Duration};
 
 use opm::{
+    agent::registry::AgentRegistry,
     config, file,
     helpers::{self, ColoredString},
     process::{Runner, get_process_cpu_usage_with_children_from_process, hash, id::Id},
@@ -33,6 +37,9 @@ use tabled::{
 // This prevents false crash detection when shell processes haven't spawned children yet
 // Reduced to 1 second to allow faster detection of immediately-crashing processes
 const STARTUP_GRACE_PERIOD_SECS: i64 = 1;
+
+static ENABLE_API: AtomicBool = AtomicBool::new(false);
+static ENABLE_WEBUI: AtomicBool = AtomicBool::new(false);
 
 extern "C" fn handle_termination_signal(_: libc::c_int) {
     pid::remove();
@@ -428,16 +435,46 @@ pub fn start(verbose: bool) {
         pid::name("OPM Restart Handler Daemon");
 
         let config = config::read().daemon;
+        let api_enabled = ENABLE_API.load(Ordering::Acquire);
+        let ui_enabled = ENABLE_WEBUI.load(Ordering::Acquire);
 
         unsafe { 
             libc::signal(libc::SIGTERM, handle_termination_signal as usize);
             libc::signal(libc::SIGPIPE, handle_sigpipe as usize);
         };
 
+        DAEMON_START_TIME.set(Utc::now().timestamp_millis() as f64);
+
         pid::write(process::id());
         log!("[daemon] new fork", "pid" => process::id());
 
+        if api_enabled {
+            log!(
+                "[daemon] API server started",
+                "address" => config::read().fmt_address(),
+                "webui" => ui_enabled
+            );
+            tokio::spawn(async move { api::start(ui_enabled).await });
+        }
+
         loop {
+            if api_enabled {
+                #[cfg(any(target_os = "linux", target_os = "macos"))]
+                {
+                    if let Ok(process_info) = Process::new(process::id()) {
+                        let cpu_usage = get_process_cpu_usage_with_children_from_process(
+                            &process_info,
+                            process::id() as i64,
+                        );
+                        DAEMON_CPU_PERCENTAGE.observe(cpu_usage);
+                        
+                        if let Ok(mem_info) = process_info.memory_info() {
+                            DAEMON_MEM_USAGE.observe(mem_info.rss() as f64);
+                        }
+                    }
+                }
+            }
+
             then!(!Runner::new().is_empty(), restart_process());
             sleep(Duration::from_millis(config.interval));
         }
@@ -487,9 +524,20 @@ pub fn start(verbose: bool) {
     }
 }
 
-pub fn restart(verbose: bool) {
+pub fn restart(api: &bool, webui: &bool, verbose: bool) {
     if pid::exists() {
         stop();
+    }
+
+    let config = config::read().daemon;
+
+    if config.web.ui || *webui {
+        ENABLE_API.store(true, Ordering::Release);
+        ENABLE_WEBUI.store(true, Ordering::Release);
+    } else if config.web.api || *api {
+        ENABLE_API.store(true, Ordering::Release);
+    } else {
+        ENABLE_API.store(*api, Ordering::Release);
     }
 
     start(verbose);

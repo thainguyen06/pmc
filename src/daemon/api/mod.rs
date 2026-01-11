@@ -4,6 +4,7 @@ mod helpers;
 mod routes;
 mod structs;
 
+use crate::webui::{self, assets::NamedFile};
 use helpers::{create_status, NotFound};
 use include_dir::{include_dir, Dir};
 use lazy_static::lazy_static;
@@ -11,7 +12,9 @@ use opm::{config, process};
 use prometheus::{opts, register_counter, register_gauge, register_histogram, register_histogram_vec};
 use prometheus::{Counter, Gauge, Histogram, HistogramVec};
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicBool, Ordering};
 use structs::ErrorMessage;
+use tera::Context;
 
 use utoipa::{
     openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
@@ -23,36 +26,11 @@ use rocket::{
     http::{ContentType, Status},
     outcome::Outcome,
     request::{self, FromRequest, Request},
-    response::{self, Responder},
     serde::json::Json,
     State,
 };
 
 use std::{io, path::PathBuf};
-
-#[derive(Debug)]
-struct NamedFile(PathBuf, String);
-
-impl NamedFile {
-    async fn send(name: String, contents: Option<&str>) -> io::Result<NamedFile> {
-        match contents {
-            Some(content) => Ok(NamedFile(PathBuf::from(name), content.to_string())),
-            None => Err(io::Error::new(io::ErrorKind::InvalidData, "File contents are not valid UTF-8")),
-        }
-    }
-}
-
-impl<'r> Responder<'r, 'static> for NamedFile {
-    fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
-        let mut response = self.1.respond_to(req)?;
-        if let Some(ext) = self.0.extension() {
-            if let Some(ct) = ContentType::from_extension(&ext.to_string_lossy()) {
-                response.set_header(ct);
-            }
-        }
-        Ok(response)
-    }
-}
 
 lazy_static! {
     pub static ref HTTP_COUNTER: Counter = register_counter!(opts!("http_requests_total", "Number of HTTP requests made.")).unwrap();
@@ -70,7 +48,11 @@ lazy_static! {
         routes::env_handler,
         routes::info_handler,
         routes::dump_handler,
+        routes::save_handler,
+        routes::restore_handler,
         routes::servers_handler,
+        routes::add_server_handler,
+        routes::remove_server_handler,
         routes::config_handler,
         routes::list_handler,
         routes::logs_handler,
@@ -84,7 +66,11 @@ lazy_static! {
         routes::metrics_handler,
         routes::prometheus_handler,
         routes::create_handler,
-        routes::rename_handler
+        routes::rename_handler,
+        routes::agent_register_handler,
+        routes::agent_heartbeat_handler,
+        routes::agent_list_handler,
+        routes::agent_unregister_handler,
     ),
     components(schemas(
         ErrorMessage,
@@ -99,6 +85,9 @@ lazy_static! {
         routes::Daemon,
         routes::Version,
         routes::ActionBody,
+        routes::AddServerBody,
+        routes::AgentRegisterBody,
+        routes::AgentHeartbeatBody,
         routes::ConfigBody,
         routes::CreateBody,
         routes::MetricsRoot,
@@ -111,7 +100,13 @@ lazy_static! {
 struct ApiDoc;
 struct Logger;
 struct AddCORS;
+struct EnableWebUI;
 struct SecurityAddon;
+
+struct TeraState {
+    path: String,
+    tera: tera::Tera,
+}
 
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
@@ -134,6 +129,21 @@ fn not_found<'m>() -> Json<ErrorMessage> { create_status(Status::NotFound) }
 
 #[catch(401)]
 fn unauthorized<'m>() -> Json<ErrorMessage> { create_status(Status::Unauthorized) }
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for EnableWebUI {
+    type Error = ();
+
+    async fn from_request(_req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let webui = IS_WEBUI.load(Ordering::Acquire);
+
+        if webui {
+            Outcome::Success(EnableWebUI)
+        } else {
+            Outcome::Error((rocket::http::Status::NotFound, ()))
+        }
+    }
+}
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for routes::Token {
@@ -161,24 +171,47 @@ impl<'r> FromRequest<'r> for routes::Token {
     }
 }
 
-pub async fn start() {
+static IS_WEBUI: AtomicBool = AtomicBool::new(false);
+
+pub async fn start(webui: bool) {
+    IS_WEBUI.store(webui, Ordering::Release);
+
+    let tera = webui::create_templates();
     let s_path = config::read().get_path().trim_end_matches('/').to_string();
+    
+    // Initialize notification manager
+    let notif_config = config::read().daemon.notifications.clone();
+    let notification_manager = std::sync::Arc::new(opm::notifications::NotificationManager::new(notif_config));
+    
+    // Initialize agent registry with notification support
+    let agent_registry = opm::agent::registry::AgentRegistry::with_notifier(notification_manager.clone());
 
     let routes = rocket::routes![
         embed,
+        scalar,
         health,
         docs_json,
         static_assets,
+        dynamic_assets,
+        routes::login,
+        routes::servers,
+        routes::dashboard,
+        routes::view_process,
+        routes::server_status,
         routes::action_handler,
         routes::env_handler,
         routes::info_handler,
         routes::dump_handler,
+        routes::save_handler,
+        routes::restore_handler,
         routes::remote_list,
         routes::remote_info,
         routes::remote_logs,
         routes::remote_rename,
         routes::remote_action,
         routes::servers_handler,
+        routes::add_server_handler,
+        routes::remove_server_handler,
         routes::config_handler,
         routes::list_handler,
         routes::logs_handler,
@@ -190,11 +223,17 @@ pub async fn start() {
         routes::prometheus_handler,
         routes::create_handler,
         routes::rename_handler,
+        routes::agent_register_handler,
+        routes::agent_heartbeat_handler,
+        routes::agent_list_handler,
+        routes::agent_unregister_handler,
     ];
 
     let rocket = rocket::custom(config::read().get_address())
         .attach(Logger)
         .attach(AddCORS)
+        .manage(TeraState { path: tera.1, tera: tera.0 })
+        .manage(agent_registry)
         .mount(format!("{s_path}/"), routes)
         .register("/", rocket::catchers![internal_error, bad_request, not_allowed, not_found, unauthorized])
         .launch()
@@ -202,6 +241,28 @@ pub async fn start() {
 
     if let Err(err) = rocket {
         log::error!("failed to launch!\n{err}")
+    }
+}
+
+async fn render(name: &str, state: &State<TeraState>, ctx: &mut Context) -> Result<String, NotFound> {
+    ctx.insert("base_path", &state.path);
+    ctx.insert("build_version", env!("CARGO_PKG_VERSION"));
+
+    state.tera.render(name, &ctx).or(Err(helpers::not_found("Page was not found")))
+}
+
+#[rocket::get("/assets/<name>")]
+async fn dynamic_assets(name: String) -> Option<NamedFile> {
+    #[cfg(not(debug_assertions))]
+    {
+        static DIR: Dir = include_dir!("src/webui/dist/assets");
+        let file = DIR.get_file(&name)?;
+        NamedFile::send(name, file.contents_utf8()).await.ok()
+    }
+    
+    #[cfg(debug_assertions)]
+    {
+        None
     }
 }
 
@@ -218,6 +279,11 @@ async fn docs_json() -> Value { json!(ApiDoc::openapi()) }
 
 #[rocket::get("/docs/embed")]
 async fn embed() -> (ContentType, String) { (ContentType::HTML, docs::Docs::new().render()) }
+
+#[rocket::get("/docs")]
+async fn scalar(state: &State<TeraState>, _webui: EnableWebUI) -> Result<(ContentType, String), NotFound> { 
+    Ok((ContentType::HTML, render("docs", &state, &mut Context::new()).await?)) 
+}
 
 #[rocket::get("/health")]
 async fn health() -> Value { json!({"healthy": true}) }

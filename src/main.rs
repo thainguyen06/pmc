@@ -1,10 +1,12 @@
 mod cli;
 mod daemon;
 mod globals;
+mod webui;
+mod agent;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{LogLevel, Verbosity};
-use macros_rs::{str, string, then};
+use macros_rs::{str, string};
 use update_informer::{Check, registry};
 
 use crate::{
@@ -39,7 +41,14 @@ enum Daemon {
     Stop,
     /// Restart daemon
     #[command(visible_alias = "restart", visible_alias = "start")]
-    Restore,
+    Restore {
+        /// Daemon api
+        #[arg(long)]
+        api: bool,
+        /// WebUI using api
+        #[arg(long)]
+        webui: bool,
+    },
     /// Check daemon health
     #[command(visible_alias = "info", visible_alias = "status")]
     Health {
@@ -194,7 +203,7 @@ enum Commands {
         server: Option<String>,
     },
     /// Daemon management
-    #[command(visible_alias = "agent", visible_alias = "bgd")]
+    #[command(visible_alias = "bgd")]
     Daemon {
         #[command(subcommand)]
         command: Daemon,
@@ -243,6 +252,289 @@ enum Commands {
         #[arg(short, long)]
         server: Option<String>,
     },
+
+    /// Server management
+    #[command(visible_alias = "remote")]
+    Server {
+        #[command(subcommand)]
+        command: ServerCommand,
+    },
+
+    /// Agent management (client-side daemon for server connection)
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ServerCommand {
+    /// Connect to a remote server
+    Connect {
+        /// Server name
+        name: String,
+        /// Server address (IP/URL)
+        #[arg(long)]
+        address: String,
+        /// Authentication token (optional)
+        #[arg(long)]
+        token: Option<String>,
+    },
+    /// List all configured servers
+    #[command(visible_alias = "ls")]
+    List,
+    /// Remove a server
+    #[command(visible_alias = "rm", visible_alias = "delete")]
+    Remove {
+        /// Server name
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Connect agent to a server
+    Connect {
+        /// Server URL (e.g., http://192.168.1.100:9876)
+        server_url: String,
+        /// Agent name (auto-generated if not provided)
+        #[arg(long)]
+        name: Option<String>,
+        /// Authentication token (optional)
+        #[arg(long)]
+        token: Option<String>,
+    },
+    /// Disconnect agent
+    Disconnect,
+    /// Show agent status
+    Status,
+}
+
+fn server_connect(name: &str, address: &str, token: &Option<String>) {
+    use opm::{config, helpers};
+    use std::collections::BTreeMap;
+    use std::fs;
+    
+    let mut servers = config::servers();
+    let server = config::structs::Server {
+        address: address.trim_end_matches('/').to_string(),
+        token: token.clone(),
+    };
+    
+    if servers.servers.is_none() {
+        servers.servers = Some(BTreeMap::new());
+    }
+    
+    if let Some(ref mut server_map) = servers.servers {
+        server_map.insert(name.to_string(), server);
+    }
+    
+    // Save to file
+    match home::home_dir() {
+        Some(path) => {
+            let config_path = format!("{}/.opm/servers.toml", path.display());
+            let contents = match toml::to_string(&servers) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("{} Failed to serialize server config: {}", *helpers::FAIL, e);
+                    return;
+                }
+            };
+            
+            if let Err(e) = fs::write(&config_path, contents) {
+                eprintln!("{} Failed to write server config: {}", *helpers::FAIL, e);
+                return;
+            }
+            
+            println!("{} Server '{}' added successfully", *helpers::SUCCESS, name);
+            println!("   Address: {}", address);
+            if token.is_some() {
+                println!("   Token: (configured)");
+            }
+        }
+        None => eprintln!("{} Cannot get home directory", *helpers::FAIL),
+    }
+}
+
+fn server_list() {
+    use opm::{config, helpers};
+    use tabled::{Table, Tabled};
+    
+    #[derive(Tabled)]
+    struct ServerDisplay {
+        #[tabled(rename = "Name")]
+        name: String,
+        #[tabled(rename = "Address")]
+        address: String,
+        #[tabled(rename = "Token")]
+        token: String,
+    }
+    
+    let servers = config::servers();
+    
+    if let Some(server_map) = servers.servers {
+        if server_map.is_empty() {
+            println!("{} No servers configured", *helpers::WARN);
+            return;
+        }
+        
+        let display: Vec<ServerDisplay> = server_map.into_iter().map(|(name, server)| {
+            ServerDisplay {
+                name,
+                address: server.address,
+                token: if server.token.is_some() { "Yes".to_string() } else { "No".to_string() },
+            }
+        }).collect();
+        
+        println!("{}", Table::new(display));
+    } else {
+        println!("{} No servers configured", *helpers::WARN);
+    }
+}
+
+fn server_remove(name: &str) {
+    use opm::{config, helpers};
+    use std::fs;
+    
+    let mut servers = config::servers();
+    
+    if let Some(ref mut server_map) = servers.servers {
+        if server_map.remove(name).is_some() {
+            // Save to file
+            match home::home_dir() {
+                Some(path) => {
+                    let config_path = format!("{}/.opm/servers.toml", path.display());
+                    let contents = match toml::to_string(&servers) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("{} Failed to serialize server config: {}", *helpers::FAIL, e);
+                            return;
+                        }
+                    };
+                    
+                    if let Err(e) = fs::write(&config_path, contents) {
+                        eprintln!("{} Failed to write server config: {}", *helpers::FAIL, e);
+                        return;
+                    }
+                    
+                    println!("{} Server '{}' removed successfully", *helpers::SUCCESS, name);
+                }
+                None => eprintln!("{} Cannot get home directory", *helpers::FAIL),
+            }
+        } else {
+            eprintln!("{} Server '{}' not found", *helpers::FAIL, name);
+        }
+    } else {
+        eprintln!("{} No servers configured", *helpers::WARN);
+    }
+}
+
+fn agent_connect(server_url: String, name: Option<String>, token: Option<String>) {
+    use opm::helpers;
+    use agent::types::AgentConfig;
+    use agent::connection::AgentConnection;
+    
+    println!("{} Starting OPM Agent...", *helpers::SUCCESS);
+    
+    let config = AgentConfig::new(server_url, name, token);
+    
+    // Save agent config
+    match save_agent_config(&config) {
+        Ok(_) => println!("{} Agent configuration saved", *helpers::SUCCESS),
+        Err(e) => {
+            eprintln!("{} Failed to save agent config: {}", *helpers::FAIL, e);
+            return;
+        }
+    }
+    
+    println!("{} Agent ID: {}", *helpers::SUCCESS, config.id);
+    println!("{} Agent Name: {}", *helpers::SUCCESS, config.name);
+    println!("{} Server URL: {}", *helpers::SUCCESS, config.server_url);
+    
+    // Start agent in async runtime
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut connection = AgentConnection::new(config);
+        if let Err(e) = connection.run().await {
+            eprintln!("{} Agent error: {}", *helpers::FAIL, e);
+        }
+    });
+}
+
+fn agent_disconnect() {
+    use opm::helpers;
+    
+    match load_agent_config() {
+        Ok(config) => {
+            println!("{} Disconnecting agent '{}'...", *helpers::SUCCESS, config.name);
+            
+            // Remove agent config file
+            if let Err(e) = remove_agent_config() {
+                eprintln!("{} Failed to remove agent config: {}", *helpers::FAIL, e);
+            } else {
+                println!("{} Agent disconnected successfully", *helpers::SUCCESS);
+            }
+        }
+        Err(_) => {
+            eprintln!("{} No active agent connection found", *helpers::WARN);
+        }
+    }
+}
+
+fn agent_status() {
+    use opm::helpers;
+    
+    match load_agent_config() {
+        Ok(config) => {
+            println!("{} Agent Status", *helpers::SUCCESS);
+            println!("   ID: {}", config.id);
+            println!("   Name: {}", config.name);
+            println!("   Server: {}", config.server_url);
+            println!("   Status: Connected"); // In real implementation, check actual connection status
+        }
+        Err(_) => {
+            println!("{} No active agent connection", *helpers::WARN);
+        }
+    }
+}
+
+fn save_agent_config(config: &agent::types::AgentConfig) -> Result<(), std::io::Error> {
+    use std::fs;
+    
+    let path = home::home_dir()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Home directory not found"))?;
+    let config_path = path.join(".opm").join("agent.toml");
+    
+    let toml_str = toml::to_string(config)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    
+    fs::write(config_path, toml_str)?;
+    Ok(())
+}
+
+fn load_agent_config() -> Result<agent::types::AgentConfig, std::io::Error> {
+    use std::fs;
+    
+    let path = home::home_dir()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Home directory not found"))?;
+    let config_path = path.join(".opm").join("agent.toml");
+    
+    let contents = fs::read_to_string(config_path)?;
+    let config: agent::types::AgentConfig = toml::from_str(&contents)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    
+    Ok(config)
+}
+
+fn remove_agent_config() -> Result<(), std::io::Error> {
+    use std::fs;
+    
+    let path = home::home_dir()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Home directory not found"))?;
+    let config_path = path.join(".opm").join("agent.toml");
+    
+    fs::remove_file(config_path)?;
+    Ok(())
 }
 
 fn main() {
@@ -329,7 +621,7 @@ fn main() {
             Daemon::Stop => daemon::stop(),
             Daemon::Reset => daemon::reset(),
             Daemon::Health { format } => daemon::health(format),
-            Daemon::Restore => daemon::restart(level.as_str() != "OFF"),
+            Daemon::Restore { api, webui } => daemon::restart(api, webui, level.as_str() != "OFF"),
             Daemon::Setup => daemon::setup(),
         },
 
@@ -342,6 +634,22 @@ fn main() {
             name,
             server,
         } => cli::adjust(item, command, name, &defaults(server)),
+        
+        Commands::Server { command } => match command {
+            ServerCommand::Connect { name, address, token } => {
+                server_connect(name, address, token)
+            }
+            ServerCommand::List => server_list(),
+            ServerCommand::Remove { name } => server_remove(name),
+        },
+
+        Commands::Agent { command } => match command {
+            AgentCommand::Connect { server_url, name, token } => {
+                agent_connect(server_url.clone(), name.clone(), token.clone())
+            }
+            AgentCommand::Disconnect => agent_disconnect(),
+            AgentCommand::Status => agent_status(),
+        },
     };
 
     if !matches!(&cli.command, Commands::Daemon { .. })
@@ -350,7 +658,13 @@ fn main() {
         && !matches!(&cli.command, Commands::Export { .. })
         && !matches!(&cli.command, Commands::GetCommand { .. })
         && !matches!(&cli.command, Commands::Adjust { .. })
+        && !matches!(&cli.command, Commands::Server { .. })
+        && !matches!(&cli.command, Commands::Agent { .. })
     {
-        then!(!daemon::pid::exists(), daemon::restart(false));
+        // When auto-starting daemon, read API/WebUI settings from config
+        if !daemon::pid::exists() {
+            let config = opm::config::read();
+            daemon::restart(&config.daemon.web.api, &config.daemon.web.ui, false);
+        }
     }
 }
