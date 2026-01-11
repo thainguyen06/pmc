@@ -179,12 +179,8 @@ pub async fn start(webui: bool) {
     let tera = webui::create_templates();
     let s_path = config::read().get_path().trim_end_matches('/').to_string();
     
-    // Initialize notification manager
-    let notif_config = config::read().daemon.notifications.clone();
-    let notification_manager = std::sync::Arc::new(opm::notifications::NotificationManager::new(notif_config));
-    
-    // Initialize agent registry with notification support
-    let agent_registry = opm::agent::registry::AgentRegistry::with_notifier(notification_manager.clone());
+    // Initialize agent registry
+    let agent_registry = opm::agent::registry::AgentRegistry::new();
 
     let routes = rocket::routes![
         embed,

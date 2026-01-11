@@ -8,6 +8,7 @@ pub static SUCCESS: Lazy<colored::ColoredString> = Lazy::new(|| "[OPM]".green())
 pub static FAIL: Lazy<colored::ColoredString> = Lazy::new(|| "[OPM]".red());
 pub static WARN: Lazy<colored::ColoredString> = Lazy::new(|| "[OPM]".yellow());
 pub static WARN_STAR: Lazy<colored::ColoredString> = Lazy::new(|| "*".yellow());
+pub static INFO: Lazy<colored::ColoredString> = Lazy::new(|| "[OPM]".cyan());
 
 #[derive(Clone, Debug)]
 pub struct ColoredString(pub colored::ColoredString);
