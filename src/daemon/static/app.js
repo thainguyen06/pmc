@@ -2,6 +2,33 @@
 const API_BASE = window.location.pathname.replace(/\/+$/, '').replace(/\/app$/, '');
 const API_TOKEN = null; // Set if authentication is required
 let currentServer = 'local'; // Track currently selected server
+let allProcesses = []; // Store all processes from all servers
+let searchQuery = ''; // Current search query
+let showAllServers = false; // Show processes from all servers
+let selectedFilePath = ''; // Selected file from browser
+let currentBrowsePath = '/home'; // Current path in file browser
+
+// Theme Management
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const newTheme = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    updateThemeIcon(newTheme);
+}
+
+function updateThemeIcon(theme) {
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.textContent = theme === 'light' ? '🌙' : '☀️';
+    }
+}
 
 // API Helper Functions
 async function apiRequest(endpoint, options = {}) {
@@ -150,20 +177,23 @@ function renderProcessList(processes) {
     if (!processes || processes.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <h3>No processes running</h3>
-                <p>Start a new process to get started</p>
+                <h3>No processes ${searchQuery ? 'matching search' : 'running'}</h3>
+                <p>${searchQuery ? 'Try a different search term' : 'Start a new process to get started'}</p>
             </div>
         `;
         return;
     }
     
-    const isRemote = currentServer !== 'local';
-    
-    container.innerHTML = processes.map(process => `
+    container.innerHTML = processes.map(process => {
+        const serverName = process.serverName || currentServer;
+        const isRemote = serverName !== 'local';
+        const serverLabel = showAllServers ? `<span style="font-weight: bold; color: var(--primary-color);">[${serverName}]</span> ` : '';
+        
+        return `
         <div class="process-item" data-process-id="${process.id}">
             <div class="process-header">
                 <div class="process-info">
-                    <div class="process-name">${escapeHtml(process.name)}</div>
+                    <div class="process-name">${serverLabel}${escapeHtml(process.name)}</div>
                     <div class="process-script">${escapeHtml(process.script)}</div>
                 </div>
                 <div class="process-status ${process.running ? 'status-online' : 'status-stopped'}">
@@ -190,7 +220,18 @@ function renderProcessList(processes) {
             </div>
             <div class="process-actions">
                 ${process.running ? `
-                    <button class="btn btn-sm btn-secondary" onclick="restartProcess(${process.id}, '${currentServer}')">Restart</button>
+                    <button class="btn btn-sm btn-secondary" onclick="restartProcess(${process.id}, '${serverName}')">Restart</button>
+                    <button class="btn btn-sm btn-danger" onclick="stopProcess(${process.id}, '${serverName}')">Stop</button>
+                ` : `
+                    <button class="btn btn-sm btn-success" onclick="startProcess(${process.id}, '${serverName}')">Start</button>
+                `}
+                <button class="btn btn-sm btn-secondary" onclick="viewLogs(${process.id}, '${escapeHtml(process.name)}', '${serverName}')">Logs</button>
+                ${!isRemote ? `<button class="btn btn-sm btn-danger" onclick="removeProcess(${process.id}, '${serverName}')">Remove</button>` : ''}
+            </div>
+        </div>
+    `;
+    }).join('');
+}
                     <button class="btn btn-sm btn-danger" onclick="stopProcess(${process.id}, '${currentServer}')">Stop</button>
                 ` : `
                     <button class="btn btn-sm btn-success" onclick="startProcess(${process.id}, '${currentServer}')">Start</button>
@@ -255,13 +296,58 @@ async function removeProcess(id, serverName = 'local') {
 
 async function refreshProcessList() {
     try {
-        const processes = await listProcesses(currentServer);
-        renderProcessList(processes);
+        if (showAllServers) {
+            // Load processes from all servers
+            allProcesses = [];
+            
+            // Get local processes
+            const localProcs = await listProcesses('local');
+            localProcs.forEach(p => {
+                p.serverName = 'local';
+                allProcesses.push(p);
+            });
+            
+            // Get remote servers
+            const servers = await listServers();
+            if (Array.isArray(servers) && servers.length > 0) {
+                await Promise.all(servers.map(async (serverName) => {
+                    try {
+                        const remoteProcs = await listProcesses(serverName);
+                        remoteProcs.forEach(p => {
+                            p.serverName = serverName;
+                            allProcesses.push(p);
+                        });
+                    } catch (error) {
+                        console.error(`Failed to load processes from ${serverName}:`, error);
+                    }
+                }));
+            }
+            
+            renderProcessList(filterProcesses(allProcesses));
+        } else {
+            const processes = await listProcesses(currentServer);
+            processes.forEach(p => p.serverName = currentServer);
+            allProcesses = processes;
+            renderProcessList(filterProcesses(processes));
+        }
         await updateServerInfo();
     } catch (error) {
         console.error('Failed to refresh process list:', error);
         showNotification('Failed to load processes: ' + error.message, 'error');
     }
+}
+
+// Filter processes based on search query
+function filterProcesses(processes) {
+    if (!searchQuery) return processes;
+    
+    const query = searchQuery.toLowerCase();
+    return processes.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        p.script.toLowerCase().includes(query) ||
+        (p.serverName && p.serverName.toLowerCase().includes(query)) ||
+        (p.pid && p.pid.toString().includes(query))
+    );
 }
 
 // Server Management UI Functions
@@ -534,16 +620,79 @@ function stopAutoRefresh() {
     }
 }
 
+// File Browser Functions
+async function openFileBrowser() {
+    showModal('file-browser-modal');
+    await loadFileList(currentBrowsePath);
+}
+
+async function loadFileList(path) {
+    const fileList = document.getElementById('file-list');
+    const currentPathInput = document.getElementById('current-path');
+    currentPathInput.value = path;
+    currentBrowsePath = path;
+    
+    // Mock file browser - in real implementation, this would call an API
+    // For now, show a simple interface
+    fileList.innerHTML = `
+        <div class="empty-state">
+            <h3>File Browser</h3>
+            <p>Enter the full path to your script in the Script/Command field</p>
+            <p style="font-size: 0.875rem; margin-top: 1rem;">
+                Examples:<br>
+                /usr/local/bin/node /home/user/app.js<br>
+                python3 /home/user/script.py<br>
+                /home/user/myapp
+            </p>
+        </div>
+    `;
+}
+
+function selectFile() {
+    // In a real implementation, this would select the file
+    // For now, just close the modal
+    hideModal('file-browser-modal');
+}
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Initial load
+    initTheme();
     loadServers();
     refreshProcessList();
     startAutoRefresh();
     
+    // Theme toggle
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
+    // Search functionality
+    document.getElementById('search-input').addEventListener('input', (e) => {
+        searchQuery = e.target.value;
+        renderProcessList(filterProcesses(allProcesses));
+    });
+    
+    // Show all servers checkbox
+    document.getElementById('show-all-servers').addEventListener('change', (e) => {
+        showAllServers = e.target.checked;
+        refreshProcessList();
+    });
+    
     // Header buttons
     document.getElementById('refresh-btn').addEventListener('click', refreshProcessList);
-    document.getElementById('new-process-btn').addEventListener('click', () => {
+    document.getElementById('new-process-btn').addEventListener('click', async () => {
+        // Populate server select in form
+        const serverSelect = document.getElementById('process-server');
+        const servers = await listServers();
+        serverSelect.innerHTML = '<option value="local">Local Server</option>';
+        if (Array.isArray(servers) && servers.length > 0) {
+            servers.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                serverSelect.appendChild(option);
+            });
+        }
+        serverSelect.value = currentServer;
         showModal('new-process-modal');
     });
     document.getElementById('servers-btn').addEventListener('click', async () => {
@@ -554,6 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Server select dropdown
     document.getElementById('server-select').addEventListener('change', (e) => {
         currentServer = e.target.value;
+        showAllServers = false;
+        document.getElementById('show-all-servers').checked = false;
         refreshProcessList();
     });
     
@@ -565,10 +716,26 @@ document.addEventListener('DOMContentLoaded', () => {
         hideModal('new-process-modal');
     });
     document.getElementById('new-process-form').addEventListener('submit', handleNewProcessSubmit);
+    document.getElementById('browse-file-btn').addEventListener('click', openFileBrowser);
     
     // Servers modal
     document.getElementById('close-servers-btn').addEventListener('click', () => {
         hideModal('servers-modal');
+    });
+    
+    // File browser modal
+    document.getElementById('close-file-browser-btn').addEventListener('click', () => {
+        hideModal('file-browser-modal');
+    });
+    document.getElementById('cancel-file-btn').addEventListener('click', () => {
+        hideModal('file-browser-modal');
+    });
+    document.getElementById('select-file-btn').addEventListener('click', selectFile);
+    document.getElementById('go-up-btn').addEventListener('click', () => {
+        const parts = currentBrowsePath.split('/').filter(p => p);
+        parts.pop();
+        const newPath = '/' + parts.join('/');
+        loadFileList(newPath || '/');
     });
     
     // Logs modal

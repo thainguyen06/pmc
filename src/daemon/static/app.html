@@ -12,6 +12,9 @@
             <div class="header-content">
                 <h1 class="header-title">OPM Process Manager</h1>
                 <div class="header-actions">
+                    <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
+                        <span id="theme-icon">🌙</span>
+                    </button>
                     <select id="server-select" class="server-select">
                         <option value="local">Local Server</option>
                     </select>
@@ -57,7 +60,16 @@
             <!-- Process List -->
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">Running Processes</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <h2 class="card-title">Running Processes</h2>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" id="search-input" class="search-input" placeholder="Search processes...">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem;">
+                                <input type="checkbox" id="show-all-servers" style="cursor: pointer;">
+                                Show all servers
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="process-list" class="process-list">
@@ -78,15 +90,28 @@
             <div class="modal-body">
                 <form id="new-process-form">
                     <div class="form-group">
+                        <label for="process-server">Server *</label>
+                        <select id="process-server" name="server" class="form-control">
+                            <option value="local">Local Server</option>
+                        </select>
+                        <small>Select which server to start the process on</small>
+                    </div>
+                    
+                    <div class="form-group">
                         <label for="process-name">Process Name (optional)</label>
                         <input type="text" id="process-name" name="name" placeholder="my-app">
                     </div>
                     
                     <div class="form-group">
                         <label for="process-script">Script/Command *</label>
-                        <input type="text" id="process-script" name="script" required 
-                               placeholder="node index.js or python app.py">
-                        <small>Enter the command to execute</small>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="process-script" name="script" required 
+                                   placeholder="node index.js or python app.py" style="flex: 1;">
+                            <button type="button" class="btn btn-sm btn-secondary" id="browse-file-btn">
+                                📁 Browse
+                            </button>
+                        </div>
+                        <small>Enter the command to execute or browse for a file</small>
                     </div>
                     
                     <div class="form-group">
@@ -155,6 +180,31 @@
                     </div>
                     <div id="servers-content" class="servers-content">
                         <div class="loading">Loading servers...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Browser Modal -->
+    <div id="file-browser-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Browse Files</h3>
+                <button class="modal-close" id="close-file-browser-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="file-browser">
+                    <div class="file-browser-path">
+                        <input type="text" id="current-path" class="form-control" value="/" readonly>
+                        <button class="btn btn-sm btn-secondary" id="go-up-btn">⬆️ Up</button>
+                    </div>
+                    <div id="file-list" class="file-list">
+                        <div class="loading">Loading files...</div>
+                    </div>
+                    <div class="file-browser-actions">
+                        <button class="btn btn-secondary" id="cancel-file-btn">Cancel</button>
+                        <button class="btn btn-primary" id="select-file-btn">Select File</button>
                     </div>
                 </div>
             </div>
