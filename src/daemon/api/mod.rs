@@ -227,7 +227,8 @@ async fn health() -> Value { json!({"healthy": true}) }
 async fn app_ui() -> Option<(ContentType, String)> {
     static DIR: Dir = include_dir!("src/daemon/static");
     let file = DIR.get_file("app.html")?;
-    let s_path = config::read().get_path().trim_end_matches('/');
+    let config = config::read();
+    let s_path = config.get_path();
     let content = file.contents_utf8()?.replace("$s_path", s_path);
     Some((ContentType::HTML, content))
 }

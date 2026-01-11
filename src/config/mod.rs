@@ -54,6 +54,7 @@ pub fn read() -> Config {
                         restarts: 10,
                         interval: 1000,
                         kind: string!("default"),
+                        web: Web::default(),
                     },
                 };
 
@@ -105,6 +106,16 @@ pub fn servers() -> Servers {
 }
 
 impl Config {
+    pub fn get_address(&self) -> rocket::figment::Figment {
+        rocket::Config::figment()
+            .merge(("address", "0.0.0.0"))
+            .merge(("port", 8080))
+    }
+    
+    pub fn get_path(&self) -> &str {
+        ""
+    }
+
     pub fn check_shell_absolute(&self) -> bool {
         Path::new(&self.runner.shell).is_absolute()
     }

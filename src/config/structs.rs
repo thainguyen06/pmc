@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub mod prelude {
-    pub use super::{Config, Daemon, Runner, Server, Servers};
+    pub use super::{Config, Daemon, Runner, Server, Servers, Web};
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -25,6 +25,20 @@ pub struct Daemon {
     pub restarts: u64,
     pub interval: u64,
     pub kind: String,
+    #[serde(default)]
+    pub web: Web,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub struct Web {
+    #[serde(default)]
+    pub secure: Option<WebSecurity>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WebSecurity {
+    pub enabled: bool,
+    pub token: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

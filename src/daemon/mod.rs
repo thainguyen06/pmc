@@ -1,6 +1,7 @@
 #[macro_use]
 mod log;
 mod fork;
+pub mod api;
 
 use chrono::{DateTime, Utc};
 use colored::Colorize;
@@ -437,6 +438,12 @@ pub fn start(verbose: bool) {
         pid::write(process::id());
         log!("[daemon] new fork", "pid" => process::id());
 
+        // Start API server in a separate task
+        tokio::spawn(async {
+            api::start().await;
+        });
+
+        // Process monitoring loop
         loop {
             then!(!Runner::new().is_empty(), restart_process());
             sleep(Duration::from_millis(config.interval));
