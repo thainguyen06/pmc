@@ -157,6 +157,18 @@ const Index = (props: { base: string }) => {
 												<MenuItem>
 													{({ focus }) => (
 														<a
+															onClick={() => action(item.id, 'restart')}
+															className={classNames(
+																focus ? 'bg-green-700/10 text-green-500' : 'text-zinc-200',
+																'rounded-md block px-2 py-2 w-full text-left cursor-pointer'
+															)}>
+															Restart
+														</a>
+													)}
+												</MenuItem>
+												<MenuItem>
+													{({ focus }) => (
+														<a
 															onClick={() => action(item.id, 'reload')}
 															className={classNames(
 																focus ? 'bg-blue-700/10 text-blue-500' : 'text-zinc-200',
