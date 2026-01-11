@@ -508,9 +508,9 @@ pub async fn restore_handler(_t: Token) -> Json<ActionResponse> {
     
     let mut runner = Runner::new();
     
-    // Restore processes from dump
+    // Restore processes that were running when saved
     for (_, item) in runner.items() {
-        if !item.running {
+        if item.running {
             runner.restart(item.id, false, false);
         }
     }

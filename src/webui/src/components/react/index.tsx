@@ -39,15 +39,27 @@ const Index = (props: { base: string }) => {
 	const action = (id: number, name: string) => api.post(`${props.base}/process/${id}/action`, { json: { method: name } }).then(() => fetch());
 	
 	// Save all processes
-	const saveAll = () => api.post(`${props.base}/daemon/save`, {}).then(() => {
-		alert('All processes saved to dumpfile');
-	});
+	const saveAll = async () => {
+		try {
+			await api.post(`${props.base}/daemon/save`, {});
+			// For now using alert, but should be replaced with toast notifications
+			alert('All processes saved to dumpfile');
+		} catch (error) {
+			alert('Failed to save processes: ' + (error as Error).message);
+		}
+	};
 	
 	// Restore all processes
-	const restoreAll = () => api.post(`${props.base}/daemon/restore`, {}).then(() => {
-		fetch();
-		alert('All processes restored from dumpfile');
-	});
+	const restoreAll = async () => {
+		try {
+			await api.post(`${props.base}/daemon/restore`, {});
+			fetch();
+			// For now using alert, but should be replaced with toast notifications
+			alert('All processes restored from dumpfile');
+		} catch (error) {
+			alert('Failed to restore processes: ' + (error as Error).message);
+		}
+	};
 
 	// Filter items based on search term and status filter
 	const filteredItems = items.value.filter((item) => {
