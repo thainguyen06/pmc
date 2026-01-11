@@ -2,7 +2,7 @@
 
 ## Overview
 
-OPM (Open Process Management) is a simple PM2 alternative written in Rust. It provides a command-line/api interface to start, stop, restart, and manage fork processes
+OPM (Open Process Management) is a simple PM2 alternative written in Rust. It provides a command-line/api/web interface to start, stop, restart, and manage fork processes
 
 ## Features
 
@@ -13,6 +13,37 @@ OPM (Open Process Management) is a simple PM2 alternative written in Rust. It pr
 - Retrieve detailed information about a specific process.
 - Get startup commands for processes.
 - Use HTTP/rust api to control processes.
+- **Web UI for visual process management** (NEW)
+- **Integrated API server with daemon** (NEW)
+
+## Web UI
+
+OPM now includes a built-in web interface for managing processes through a browser. The web UI provides:
+
+- Real-time process monitoring with auto-refresh
+- Visual process list with status indicators
+- Easy process creation with a user-friendly form
+- Process control buttons (start, stop, restart, remove)
+- Log viewer with filtering and follow mode
+- Process details display (CPU, memory, uptime, etc.)
+
+### Accessing the Web UI
+
+Once the OPM daemon is running, the web UI is automatically available at:
+
+```
+http://localhost:8080/app
+```
+
+The daemon starts automatically with the integrated API server on port 8080.
+
+### Screenshots
+
+**Main Process List:**
+![OPM Web UI - Main View](https://github.com/user-attachments/assets/e2af6365-6eeb-4c67-9c05-4d99812465c4)
+
+**New Process Form:**
+![OPM Web UI - New Process](https://github.com/user-attachments/assets/b4976ed8-d0b3-41ff-a80a-007884e9beee)
 
 ## Usage
 
@@ -121,6 +152,55 @@ opm get-command myapp
 ```
 
 For more command information, check out `opm --help`
+
+### Remote Server Management
+
+OPM supports managing processes on remote OPM instances. The web UI and API can connect to remote servers.
+
+#### API Endpoints for Remote Management
+
+All CLI commands support the `--server` flag to operate on remote instances:
+
+```bash
+# List processes on a remote server
+opm list --server remote-name
+
+# Start a process on a remote server
+opm start "node app.js" --name "remote-app" --server remote-name
+
+# View logs from a remote server
+opm logs 0 --server remote-name
+```
+
+#### Configuring Remote Servers
+
+Remote servers are configured in `~/.opm/servers.toml`:
+
+```toml
+[servers.production]
+address = "http://production-server:8080"
+token = "your-auth-token"  # Optional
+
+[servers.staging]
+address = "http://staging-server:8080"
+```
+
+#### API Access
+
+The integrated API server (automatically started with the daemon) provides:
+
+- **REST API** on `http://localhost:8080` for programmatic access
+- **Web UI** on `http://localhost:8080/app` for browser-based management
+- **Remote API** endpoints at `/remote/{server-name}/` for managing remote instances
+- **OpenAPI Documentation** at `http://localhost:8080/docs/embed`
+
+The API supports all process management operations:
+- `/list` - List all processes
+- `/process/{id}/info` - Get process details
+- `/process/{id}/action` - Control processes (start, stop, restart, etc.)
+- `/process/{id}/logs/{type}` - View process logs
+- `/process/create` - Create new processes
+- `/daemon/metrics` - Get daemon metrics and health
 
 ## Troubleshooting
 
