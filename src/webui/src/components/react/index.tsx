@@ -189,13 +189,14 @@ const Index = (props: { base: string }) => {
 				</Header>
 				
 				{/* Search and Filter Section */}
-				<div className="px-4 sm:px-6 lg:px-8 pb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
+				<div className="px-4 sm:px-6 lg:px-8 pb-4 flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center" role="search" aria-label="Search and filter processes">
 					<div className="flex-1">
 						<input
 							type="text"
 							placeholder="Search by name or server..."
 							value={searchTerm}
 							onChange={(e) => setSearchTerm(e.target.value)}
+							aria-label="Search processes by name or server"
 							className="w-full px-4 py-2.5 bg-zinc-900/50 border border-zinc-700/50 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
 						/>
 					</div>
@@ -203,6 +204,7 @@ const Index = (props: { base: string }) => {
 						<select
 							value={statusFilter}
 							onChange={(e) => setStatusFilter(e.target.value)}
+							aria-label="Filter processes by status"
 							className="w-full sm:w-auto px-4 py-2.5 bg-zinc-900/50 border border-zinc-700/50 rounded-lg text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all">
 							<option value="all">All Status</option>
 							<option value="online">Online</option>

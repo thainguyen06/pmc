@@ -39,6 +39,9 @@ const { title, description } = Astro.props;
 		<script>
 			import { $settings } from '@/store';
 			
+			// Authentication check timeout configuration
+			const AUTH_CHECK_TIMEOUT = 3000; // 3 seconds
+			
 			class AppRedirect extends HTMLElement {
 				constructor() {
 					super();
@@ -52,7 +55,7 @@ const { title, description } = Astro.props;
 					
 					// Add timeout and cache check to improve performance
 					const controller = new AbortController();
-					const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+					const timeoutId = setTimeout(() => controller.abort(), AUTH_CHECK_TIMEOUT);
 					
 					fetch(checkEndpoint, {
 						headers: { token: $settings.get().token || '' },
