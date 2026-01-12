@@ -1090,8 +1090,10 @@ impl<'i> Internal<'i> {
             // Check if the restart was successful
             if let Some(process) = runner.info(*id) {
                 // Verify the process is actually running using the same logic as daemon
-                // Use is_pid_alive which includes zombie detection
-                let process_alive = opm::process::is_pid_alive(process.pid);
+                // Use shell_pid if available (for shell scripts), otherwise use main pid
+                // This ensures consistent behavior between restore and daemon monitoring
+                let pid_to_check = process.shell_pid.unwrap_or(process.pid);
+                let process_alive = opm::process::is_pid_alive(pid_to_check);
                 
                 if process.running && process_alive {
                     restored_ids.push(*id);
