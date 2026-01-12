@@ -661,6 +661,136 @@ pub async fn config_handler(_t: Token) -> Json<ConfigBody> {
     })
 }
 
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct NotificationConfig {
+    enabled: bool,
+    #[serde(default)]
+    events: NotificationEvents,
+    #[serde(default)]
+    channels: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct NotificationEvents {
+    #[serde(default)]
+    agent_connect: bool,
+    #[serde(default)]
+    agent_disconnect: bool,
+    #[serde(default)]
+    process_start: bool,
+    #[serde(default)]
+    process_stop: bool,
+    #[serde(default)]
+    process_crash: bool,
+    #[serde(default)]
+    process_restart: bool,
+}
+
+impl Default for NotificationEvents {
+    fn default() -> Self {
+        Self {
+            agent_connect: false,
+            agent_disconnect: false,
+            process_start: false,
+            process_stop: false,
+            process_crash: false,
+            process_restart: false,
+        }
+    }
+}
+
+#[get("/daemon/config/notifications")]
+#[utoipa::path(get, tag = "Daemon", path = "/daemon/config/notifications", security((), ("api_key" = [])),
+    responses(
+        (status = 200, description = "Get notification config successfully", body = NotificationConfig),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn get_notifications_handler(_t: Token) -> Json<NotificationConfig> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["get_notifications"]).start_timer();
+    let config = config::read().daemon.notifications;
+
+    HTTP_COUNTER.inc();
+    timer.observe_duration();
+
+    let notification_config = match config {
+        Some(notif) => NotificationConfig {
+            enabled: notif.enabled,
+            events: NotificationEvents {
+                agent_connect: notif.events.as_ref().map(|e| e.agent_connect).unwrap_or(false),
+                agent_disconnect: notif.events.as_ref().map(|e| e.agent_disconnect).unwrap_or(false),
+                process_start: notif.events.as_ref().map(|e| e.process_start).unwrap_or(false),
+                process_stop: notif.events.as_ref().map(|e| e.process_stop).unwrap_or(false),
+                process_crash: notif.events.as_ref().map(|e| e.process_crash).unwrap_or(false),
+                process_restart: notif.events.as_ref().map(|e| e.process_restart).unwrap_or(false),
+            },
+            channels: notif.channels.unwrap_or_default(),
+        },
+        None => NotificationConfig {
+            enabled: false,
+            events: NotificationEvents::default(),
+            channels: vec![],
+        },
+    };
+
+    Json(notification_config)
+}
+
+#[post("/daemon/config/notifications", format = "json", data = "<body>")]
+#[utoipa::path(post, tag = "Daemon", path = "/daemon/config/notifications", request_body = NotificationConfig,
+    security((), ("api_key" = [])),
+    responses(
+        (status = 200, description = "Notification config saved successfully"),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn save_notifications_handler(body: Json<NotificationConfig>, _t: Token) -> Result<Json<serde_json::Value>, GenericError> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["save_notifications"]).start_timer();
+    
+    HTTP_COUNTER.inc();
+    
+    // Read current config
+    let mut full_config = config::read();
+    
+    // Update notification config
+    full_config.daemon.notifications = Some(config::structs::Notifications {
+        enabled: body.enabled,
+        events: Some(config::structs::NotificationEvents {
+            agent_connect: body.events.agent_connect,
+            agent_disconnect: body.events.agent_disconnect,
+            process_start: body.events.process_start,
+            process_stop: body.events.process_stop,
+            process_crash: body.events.process_crash,
+            process_restart: body.events.process_restart,
+        }),
+        channels: Some(body.channels.clone()),
+    });
+    
+    // Save config to file
+    let config_path = match home::home_dir() {
+        Some(path) => format!("{}/.opm/config.toml", path.display()),
+        None => return Err(generic_error(Status::InternalServerError, "Cannot determine home directory".to_string())),
+    };
+    
+    let contents = match toml::to_string(&full_config) {
+        Ok(contents) => contents,
+        Err(err) => return Err(generic_error(Status::InternalServerError, format!("Cannot serialize config: {}", err))),
+    };
+    
+    if let Err(err) = std::fs::write(&config_path, contents) {
+        return Err(generic_error(Status::InternalServerError, format!("Cannot write config: {}", err)));
+    }
+    
+    timer.observe_duration();
+    Ok(Json(json!({"success": true, "message": "Notification settings saved"})))
+}
+
 #[get("/list")]
 #[utoipa::path(get, path = "/list", tag = "Process", security((), ("api_key" = [])),
     responses(
@@ -963,6 +1093,83 @@ pub async fn action_handler(id: usize, body: Json<ActionBody>, _t: Token) -> Res
     } else {
         Err(not_found("Process was not found"))
     }
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct BulkActionBody {
+    #[schema(example = json!([0, 1, 2]))]
+    ids: Vec<usize>,
+    #[schema(example = "restart")]
+    method: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BulkActionResponse {
+    success: Vec<usize>,
+    failed: Vec<usize>,
+    action: String,
+}
+
+#[post("/process/bulk-action", format = "json", data = "<body>")]
+#[utoipa::path(post, tag = "Process", path = "/process/bulk-action", request_body = BulkActionBody,
+    security((), ("api_key" = [])),
+    responses(
+        (status = 200, description = "Run bulk action on processes", body = BulkActionResponse),
+        (
+            status = UNAUTHORIZED, description = "Authentication failed or not provided", body = ErrorMessage, 
+            example = json!({"code": 401, "message": "Unauthorized"})
+        )
+    )
+)]
+pub async fn bulk_action_handler(body: Json<BulkActionBody>, _t: Token) -> Json<BulkActionResponse> {
+    let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["bulk_action"]).start_timer();
+    let method = body.method.as_str();
+    let mut success = Vec::new();
+    let mut failed = Vec::new();
+
+    HTTP_COUNTER.inc();
+    
+    for id in &body.ids {
+        // Create a new runner for each iteration to avoid borrow checker issues
+        let mut runner = Runner::new();
+        
+        if runner.exists(*id) {
+            match method {
+                "start" => {
+                    runner.get(*id).restart(false);
+                    success.push(*id);
+                }
+                "restart" => {
+                    runner.get(*id).restart(true);
+                    success.push(*id);
+                }
+                "reload" => {
+                    runner.get(*id).reload(true);
+                    success.push(*id);
+                }
+                "stop" | "kill" => {
+                    runner.get(*id).stop();
+                    success.push(*id);
+                }
+                "delete" | "remove" => {
+                    runner.remove(*id);
+                    success.push(*id);
+                }
+                _ => {
+                    failed.push(*id);
+                }
+            }
+        } else {
+            failed.push(*id);
+        }
+    }
+
+    timer.observe_duration();
+    Json(BulkActionResponse {
+        success,
+        failed,
+        action: method.to_string(),
+    })
 }
 
 pub async fn get_metrics() -> MetricsRoot {

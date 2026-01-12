@@ -11,6 +11,8 @@ const Index = (props: { base: string }) => {
 	const items = useArray([]);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [statusFilter, setStatusFilter] = useState('all');
+	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+	const [showBulkActions, setShowBulkActions] = useState(false);
 
 	const badge = {
 		online: 'bg-emerald-400',
@@ -20,6 +22,7 @@ const Index = (props: { base: string }) => {
 
 	async function fetch() {
 		items.clear();
+		setSelectedIds(new Set()); // Clear selections on refresh
 
 		const res = await api.get(props.base + '/list').json();
 		res.map((s) => items.push({ ...s, server: 'local' }));
@@ -37,11 +40,53 @@ const Index = (props: { base: string }) => {
 	const isRunning = (status: string): bool => (status == 'stopped' ? false : status == 'crashed' ? false : true);
 	const action = (id: number, name: string) => api.post(`${props.base}/process/${id}/action`, { json: { method: name } }).then(() => fetch());
 	
+	// Toggle selection
+	const toggleSelect = (id: number) => {
+		const newSelected = new Set(selectedIds);
+		if (newSelected.has(id)) {
+			newSelected.delete(id);
+		} else {
+			newSelected.add(id);
+		}
+		setSelectedIds(newSelected);
+		setShowBulkActions(newSelected.size > 0);
+	};
+
+	// Select all visible items
+	const selectAll = () => {
+		const allIds = new Set(filteredItems.map((item) => item.id));
+		setSelectedIds(allIds);
+		setShowBulkActions(allIds.size > 0);
+	};
+
+	// Clear selection
+	const clearSelection = () => {
+		setSelectedIds(new Set());
+		setShowBulkActions(false);
+	};
+
+	// Bulk action
+	const bulkAction = async (method: string) => {
+		if (selectedIds.size === 0) return;
+		
+		try {
+			await api.post(`${props.base}/process/bulk-action`, {
+				json: {
+					ids: Array.from(selectedIds),
+					method: method
+				}
+			});
+			await fetch();
+			alert(`${method} action completed on ${selectedIds.size} processes`);
+		} catch (error) {
+			alert('Failed to perform bulk action: ' + (error as Error).message);
+		}
+	};
+	
 	// Save all processes
 	const saveAll = async () => {
 		try {
 			await api.post(`${props.base}/daemon/save`, {});
-			// For now using alert, but should be replaced with toast notifications
 			alert('All processes saved to dumpfile');
 		} catch (error) {
 			alert('Failed to save processes: ' + (error as Error).message);
@@ -53,7 +98,6 @@ const Index = (props: { base: string }) => {
 		try {
 			await api.post(`${props.base}/daemon/restore`, {});
 			fetch();
-			// For now using alert, but should be replaced with toast notifications
 			alert('All processes restored from dumpfile');
 		} catch (error) {
 			alert('Failed to restore processes: ' + (error as Error).message);
@@ -81,19 +125,60 @@ const Index = (props: { base: string }) => {
 		return (
 			<Fragment>
 				<Header name={`Viewing ${filteredItems.length} of ${items.count()} items`} description="View and manage all the processes on your daemons.">
-					<div className="flex gap-2">
-						<button
-							type="button"
-							onClick={saveAll}
-							className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-700 hover:border-zinc-600 bg-zinc-800 text-zinc-50 hover:bg-zinc-700 px-3 py-2 text-sm font-semibold rounded-lg">
-							Save All
-						</button>
-						<button
-							type="button"
-							onClick={restoreAll}
-							className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-700 hover:border-zinc-600 bg-zinc-800 text-zinc-50 hover:bg-zinc-700 px-3 py-2 text-sm font-semibold rounded-lg">
-							Restore All
-						</button>
+					<div className="flex gap-2 flex-wrap">
+						{showBulkActions && (
+							<>
+								<span className="inline-flex items-center px-3 py-2 text-sm font-semibold text-zinc-300 bg-zinc-800 rounded-lg border border-zinc-700">
+									{selectedIds.size} selected
+								</span>
+								<button
+									type="button"
+									onClick={() => bulkAction('restart')}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-green-700 hover:border-green-600 bg-green-600 text-white hover:bg-green-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Restart
+								</button>
+								<button
+									type="button"
+									onClick={() => bulkAction('stop')}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-amber-700 hover:border-amber-600 bg-amber-600 text-white hover:bg-amber-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Stop
+								</button>
+								<button
+									type="button"
+									onClick={() => bulkAction('delete')}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-red-700 hover:border-red-600 bg-red-600 text-white hover:bg-red-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Delete
+								</button>
+								<button
+									type="button"
+									onClick={clearSelection}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-700 hover:border-zinc-600 bg-zinc-800 text-zinc-50 hover:bg-zinc-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Clear
+								</button>
+							</>
+						)}
+						{!showBulkActions && (
+							<>
+								<button
+									type="button"
+									onClick={selectAll}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-700 hover:border-zinc-600 bg-zinc-800 text-zinc-50 hover:bg-zinc-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Select All
+								</button>
+								<button
+									type="button"
+									onClick={saveAll}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-700 hover:border-zinc-600 bg-zinc-800 text-zinc-50 hover:bg-zinc-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Save All
+								</button>
+								<button
+									type="button"
+									onClick={restoreAll}
+									className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-700 hover:border-zinc-600 bg-zinc-800 text-zinc-50 hover:bg-zinc-700 px-3 py-2 text-sm font-semibold rounded-lg">
+									Restore All
+								</button>
+							</>
+						)}
 						<button
 							type="button"
 							onClick={fetch}
@@ -129,8 +214,20 @@ const Index = (props: { base: string }) => {
 
 				<ul role="list" className="px-8 pb-8 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-4 xl:gap-x-8">
 					{filteredItems.map((item) => (
-						<li key={item.id + item.name} className="rounded-lg border border-zinc-700/50 bg-zinc-900/10 hover:bg-zinc-900/40 hover:border-zinc-700">
-							<div className="flex items-center gap-x-4 border-b border-zinc-800/80 bg-zinc-900/20 px-4 py-3">
+						<li key={item.id + item.name} className="rounded-lg border border-zinc-700/50 bg-zinc-900/10 hover:bg-zinc-900/40 hover:border-zinc-700 relative">
+							{/* Selection checkbox */}
+							<div className="absolute top-2 left-2 z-10">
+								<input
+									type="checkbox"
+									checked={selectedIds.has(item.id)}
+									onChange={(e) => {
+										e.stopPropagation();
+										toggleSelect(item.id);
+									}}
+									className="h-5 w-5 rounded border-zinc-600 bg-zinc-800 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 focus:ring-offset-zinc-900 cursor-pointer"
+								/>
+							</div>
+							<div className="flex items-center gap-x-4 border-b border-zinc-800/80 bg-zinc-900/20 px-4 py-3 pl-10">
 								<span className="text-md font-bold text-zinc-200 truncate">
 									{item.name}
 									<div className="text-xs font-medium text-zinc-400">{item.server != 'local' ? item.server : 'Internal'}</div>

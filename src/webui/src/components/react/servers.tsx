@@ -7,11 +7,19 @@ import { useArray, classNames, startDuration } from '@/helpers';
 const Index = (props: { base: string }) => {
 	const agents = useArray([]);
 	const [loading, setLoading] = useState(true);
+	const [serverHost, setServerHost] = useState('localhost');
 
 	const badge = {
 		online: 'bg-emerald-400/10 text-emerald-400',
 		offline: 'bg-red-500/10 text-red-500'
 	};
+
+	// Auto-detect server host from current URL
+	useEffect(() => {
+		const hostname = window.location.hostname;
+		const port = window.location.port || '9876';
+		setServerHost(`${hostname}:${port}`);
+	}, []);
 
 	async function fetchAgents() {
 		try {
@@ -69,9 +77,11 @@ const Index = (props: { base: string }) => {
 					<div className="text-zinc-500 text-sm space-y-2 max-w-2xl mx-auto">
 						<p>To connect an agent to this server, run the following command on a remote machine:</p>
 						<code className="block bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-left text-zinc-300 font-mono text-sm mt-4">
-							opm agent connect http://&lt;server-ip&gt;:9876 --name my-agent
+							opm agent connect http://{serverHost} --name my-agent
 						</code>
-						<p className="mt-4 text-xs">Replace &lt;server-ip&gt; with this server's IP address</p>
+						<p className="mt-4 text-xs text-zinc-400">
+							Replace the hostname if needed. The command is automatically generated based on your current connection.
+						</p>
 					</div>
 				</div>
 			) : (

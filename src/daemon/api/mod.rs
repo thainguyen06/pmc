@@ -50,6 +50,7 @@ lazy_static! {
     modifiers(&SecurityAddon),
     paths(
         routes::action_handler,
+        routes::bulk_action_handler,
         routes::env_handler,
         routes::info_handler,
         routes::dump_handler,
@@ -59,6 +60,8 @@ lazy_static! {
         routes::add_server_handler,
         routes::remove_server_handler,
         routes::config_handler,
+        routes::get_notifications_handler,
+        routes::save_notifications_handler,
         routes::list_handler,
         routes::logs_handler,
         routes::remote_list,
@@ -99,6 +102,10 @@ lazy_static! {
         routes::LogResponse,
         routes::DocMemoryInfo,
         routes::ActionResponse,
+        routes::NotificationConfig,
+        routes::NotificationEvents,
+        routes::BulkActionBody,
+        routes::BulkActionResponse,
     ))
 )]
 
@@ -262,6 +269,9 @@ pub async fn start(webui: bool) {
         routes::add_server_handler,
         routes::remove_server_handler,
         routes::config_handler,
+        routes::get_notifications_handler,
+        routes::save_notifications_handler,
+        routes::bulk_action_handler,
         routes::list_handler,
         routes::logs_handler,
         routes::logs_raw_handler,
