@@ -619,11 +619,19 @@ pub async fn restore_handler(_t: Token) -> Json<ActionResponse> {
         .map(|(_, item)| item.id)
         .collect();
     
-    // Restore those processes
+    // Restore those processes (without incrementing counters)
     let mut runner = Runner::new();
     for id in running_ids {
         runner.restart(id, false, false);
     }
+    
+    // Reset restart and crash counters after restore for ALL processes
+    // This gives each process a fresh start after system restore/reboot
+    let all_process_ids: Vec<usize> = runner.items().keys().copied().collect();
+    for id in all_process_ids {
+        runner.reset_counters(id);
+    }
+    runner.save();
     
     timer.observe_duration();
     Json(attempt(true, "restore"))

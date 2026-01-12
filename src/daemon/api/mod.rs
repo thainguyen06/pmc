@@ -231,6 +231,8 @@ pub async fn start(webui: bool) {
         routes::agent_unregister_handler,
     ];
 
+    log::info!("Configuring Rocket server at {}", config::read().fmt_address());
+    
     let rocket = rocket::custom(config::read().get_address())
         .attach(Logger)
         .attach(AddCORS)
@@ -242,7 +244,12 @@ pub async fn start(webui: bool) {
         .await;
 
     if let Err(err) = rocket {
-        log::error!("failed to launch!\n{err}")
+        log::error!("Failed to launch Rocket server: {}", err);
+        eprintln!("ERROR: Failed to launch API server: {}", err);
+        eprintln!("Please check:");
+        eprintln!("  1. The port is not already in use");
+        eprintln!("  2. You have permission to bind to the configured address");
+        eprintln!("  3. Your firewall settings allow the connection");
     }
 }
 

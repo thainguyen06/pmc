@@ -42,6 +42,9 @@ pub fn read() -> Config {
             let config_path = format!("{path}/.opm/config.toml");
 
             if !Exists::check(&config_path).file() {
+                // Generate a secure token for API protection
+                let secure_token = uuid::Uuid::new_v4().to_string();
+                
                 let config = Config {
                     default: string!("local"),
                     runner: Runner {
@@ -54,7 +57,17 @@ pub fn read() -> Config {
                         restarts: 10,
                         interval: 1000,
                         kind: string!("default"),
-                        web: structs::default_web(),
+                        web: structs::Web {
+                            ui: false,
+                            api: false,
+                            address: "127.0.0.1".to_string(),
+                            port: 9876,
+                            secure: Some(structs::Secure {
+                                enabled: false,
+                                token: secure_token,
+                            }),
+                            path: None,
+                        },
                         notifications: None,
                     },
                 };
@@ -75,10 +88,30 @@ pub fn read() -> Config {
                         string!(err).white()
                     )
                 }
-                log::info!("created config file");
+                log::info!("created config file with secure API token");
             }
 
-            file::read(config_path)
+            // Read the config and check if secure token needs to be added
+            let mut config: Config = file::read(config_path.clone());
+            let mut needs_save = false;
+            
+            // If web.secure is None, generate and add a token
+            if config.daemon.web.secure.is_none() {
+                let secure_token = uuid::Uuid::new_v4().to_string();
+                config.daemon.web.secure = Some(structs::Secure {
+                    enabled: false,
+                    token: secure_token,
+                });
+                needs_save = true;
+                log::info!("added secure API token to existing config");
+            }
+            
+            // Save config if it was modified
+            if needs_save {
+                config.save();
+            }
+            
+            config
         }
         None => crashln!("{} Impossible to get your home directory", *helpers::FAIL),
     }

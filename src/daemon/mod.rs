@@ -449,11 +449,21 @@ pub fn start(verbose: bool) {
 
         if api_enabled {
             log!(
-                "[daemon] API server started",
+                "[daemon] Starting API server",
                 "address" => config::read().fmt_address(),
                 "webui" => ui_enabled
             );
             tokio::spawn(async move { api::start(ui_enabled).await });
+            
+            // Give the API server a moment to start and bind to the port
+            // This helps ensure the server is actually listening before we report success
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            
+            log!(
+                "[daemon] API server task spawned",
+                "address" => config::read().fmt_address(),
+                "webui" => ui_enabled
+            );
         }
 
         loop {
