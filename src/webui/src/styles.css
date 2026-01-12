@@ -49,23 +49,35 @@ button, a, input, select {
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Enhanced hover effects */
-button:hover, a:hover {
-	transform: translateY(-1px);
+/* Enhanced hover effects - only on devices with hover capability (not mobile) */
+@media (hover: hover) and (pointer: fine) {
+	button:hover, a:hover {
+		transform: translateY(-1px);
+	}
+
+	button:active, a:active {
+		transform: translateY(0);
+	}
 }
 
-button:active, a:active {
-	transform: translateY(0);
-}
-
-/* Card hover effects */
+/* Card hover effects - only on devices with hover capability (not mobile) */
 .card-hover {
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.card-hover:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+@media (hover: hover) and (pointer: fine) {
+	.card-hover:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+	}
+}
+
+/* Mobile-friendly card active state */
+@media (hover: none) or (pointer: coarse) {
+	.card-hover:active {
+		transform: scale(0.98);
+		opacity: 0.9;
+	}
 }
 
 /* Skeleton loader animation */

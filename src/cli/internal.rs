@@ -1082,30 +1082,18 @@ impl<'i> Internal<'i> {
             }
             .restart(&None, &None, false, true, false);
 
+            // Wait a short period to allow processes to start up before checking PID
+            // This prevents false crash detection for processes that take time to initialize
+            // Shell scripts in particular need time for the shell to spawn the actual process
+            std::thread::sleep(std::time::Duration::from_millis(150));
+
             // Check if the restart was successful
             if let Some(process) = runner.info(*id) {
-                // Verify the process is actually running by checking if the PID exists
-                // Use the same PID selection logic as the daemon for consistency
-                let pid_to_check = process.shell_pid.unwrap_or(process.pid);
-                let pid_valid = if pid_to_check > 0 {
-                    #[cfg(target_os = "linux")]
-                    {
-                        std::path::Path::new(&format!("/proc/{}", pid_to_check)).exists()
-                    }
-                    #[cfg(not(target_os = "linux"))]
-                    {
-                        // On non-Linux systems, use kill with signal 0
-                        match kill(Pid::from_raw(pid_to_check as i32), None) {
-                            Ok(_) => true,
-                            Err(Errno::ESRCH) => false,  // Process doesn't exist
-                            Err(_) => true,  // Process exists but we got a permission error or other
-                        }
-                    }
-                } else {
-                    false
-                };
+                // Verify the process is actually running using the same logic as daemon
+                // Use is_pid_alive which includes zombie detection
+                let process_alive = opm::process::is_pid_alive(process.pid);
                 
-                if process.running && pid_valid {
+                if process.running && process_alive {
                     restored_ids.push(*id);
                 } else {
                     failed_ids.push((*id, name.clone()));
