@@ -19,9 +19,9 @@ const { active } = Astro.props;
             <span class="hidden sm:inline">Notifications</span>
             <span class="sm:hidden">Notifs</span>
           </a>
-          <a href="{{base_path | safe}}/readme" class={`${active == "readme" ? 'border-b-2 border-sky-400 text-sky-300' : 'border-b-2 border-transparent hover:border-zinc-300 text-zinc-400 hover:text-zinc-100'} px-2 sm:px-3 pt-1 text-xs sm:text-sm lg:text-base font-medium inline-flex items-center whitespace-nowrap py-2 transition-all duration-200`}>
-            <span class="hidden sm:inline">Documentation</span>
-            <span class="sm:hidden">Docs</span>
+          <a href="{{base_path | safe}}/docs" class={`${active == "docs" ? 'border-b-2 border-sky-400 text-sky-300' : 'border-b-2 border-transparent hover:border-zinc-300 text-zinc-400 hover:text-zinc-100'} px-2 sm:px-3 pt-1 text-xs sm:text-sm lg:text-base font-medium inline-flex items-center whitespace-nowrap py-2 transition-all duration-200`}>
+            <span class="hidden sm:inline">API Docs</span>
+            <span class="sm:hidden">API</span>
           </a>
         </div>
       </div>
