@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use fork::{Fork, daemon};
 use global_placeholders::global;
-use macros_rs::{crashln, str, string, ternary, then};
+use macros_rs::{crashln, str, string, ternary};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use opm::process::{MemoryInfo, unix::NativeProcess as Process};
 use serde::Serialize;
@@ -519,7 +519,23 @@ pub fn start(verbose: bool) {
                 }
             }
 
-            then!(!Runner::new().is_empty(), restart_process());
+            // Wrap restart_process in catch_unwind to prevent daemon crashes
+            // If a process monitoring operation fails, we log it and continue
+            // This ensures the daemon remains stable even when individual processes fail
+            if !Runner::new().is_empty() {
+                use std::panic;
+                
+                let result = panic::catch_unwind(|| {
+                    restart_process();
+                });
+                
+                if let Err(err) = result {
+                    // Log the panic but don't crash the daemon
+                    log!("[daemon] panic in restart_process", "error" => format!("{:?}", err));
+                    eprintln!("[daemon] Warning: process monitoring encountered an error but daemon continues running");
+                }
+            }
+            
             sleep(Duration::from_millis(config.interval));
         }
     }
