@@ -31,14 +31,6 @@ impl Items {
         Items { items }
     }
 
-    pub fn get_string(&self) -> Option<&str> {
-        if self.items.len() == 1 {
-            self.items[0].get_string()
-        } else {
-            None
-        }
-    }
-
     pub fn is_all(&self) -> bool {
         self.items.len() == 1 && self.items[0].get_string() == Some("all")
     }
