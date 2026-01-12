@@ -457,29 +457,47 @@ pub fn start(verbose: bool) {
             // Spawn API server in a separate task
             let api_handle = tokio::spawn(async move { api::start(ui_enabled).await });
             
-            // Give the API server time to start and bind to the port
-            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            
-            // Check if the API server is actually listening
+            // Wait for the API server to start and bind to the port
+            // Use a retry loop with exponential backoff to allow time for Rocket initialization
             let addr = config::read().fmt_address();
-            let is_listening = tokio::net::TcpStream::connect(&addr).await.is_ok();
+            let max_retries = 10;
+            let mut retry_count = 0;
+            let mut is_listening = false;
+            
+            while retry_count < max_retries {
+                // Wait before checking - start with 300ms and increase
+                let wait_ms = 300 + (retry_count * 200);
+                tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
+                
+                // Try to connect to the API server
+                if tokio::net::TcpStream::connect(&addr).await.is_ok() {
+                    is_listening = true;
+                    break;
+                }
+                
+                // Check if the task has already failed - if so, no point retrying
+                if api_handle.is_finished() {
+                    log!("[daemon] API server task has terminated", "status" => "unexpected", "retry" => retry_count);
+                    break;
+                }
+                
+                retry_count += 1;
+            }
             
             if is_listening {
                 log!(
                     "[daemon] API server successfully started",
                     "address" => addr,
-                    "webui" => ui_enabled
+                    "webui" => ui_enabled,
+                    "retries" => retry_count
                 );
             } else {
                 log!(
                     "[daemon] API server may have failed to start",
                     "address" => addr,
-                    "status" => "check logs and port availability"
+                    "status" => "check logs and port availability",
+                    "retries" => retry_count
                 );
-                // Check if the task has already failed
-                if api_handle.is_finished() {
-                    log!("[daemon] API server task has terminated", "status" => "unexpected");
-                }
             }
         }
 
