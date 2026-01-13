@@ -1067,27 +1067,37 @@ pub async fn action_handler(id: usize, body: Json<ActionBody>, _t: Token) -> Res
         HTTP_COUNTER.inc();
         match method {
             "start" => {
-                runner.get(id).restart(false);  // start should not increment
+                let mut item = runner.get(id);
+                item.restart(false);  // start should not increment
+                item.get_runner().save();
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
             "restart" => {
-                runner.get(id).restart(true);  // restart should increment
+                let mut item = runner.get(id);
+                item.restart(true);  // restart should increment
+                item.get_runner().save();
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
             "reload" => {
-                runner.get(id).reload(true);  // reload should increment
+                let mut item = runner.get(id);
+                item.reload(true);  // reload should increment
+                item.get_runner().save();
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
             "stop" | "kill" => {
-                runner.get(id).stop();
+                let mut item = runner.get(id);
+                item.stop();
+                item.get_runner().save();
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
             "reset_env" | "clear_env" => {
-                runner.get(id).clear_env();
+                let mut item = runner.get(id);
+                item.clear_env();
+                item.get_runner().save();
                 timer.observe_duration();
                 Ok(Json(attempt(true, method)))
             }
@@ -1152,19 +1162,27 @@ pub async fn bulk_action_handler(body: Json<BulkActionBody>, _t: Token) -> Json<
         if runner.exists(*id) {
             match method {
                 "start" => {
-                    runner.get(*id).restart(false);
+                    let mut item = runner.get(*id);
+                    item.restart(false);
+                    item.get_runner().save();
                     success.push(*id);
                 }
                 "restart" => {
-                    runner.get(*id).restart(true);
+                    let mut item = runner.get(*id);
+                    item.restart(true);
+                    item.get_runner().save();
                     success.push(*id);
                 }
                 "reload" => {
-                    runner.get(*id).reload(true);
+                    let mut item = runner.get(*id);
+                    item.reload(true);
+                    item.get_runner().save();
                     success.push(*id);
                 }
                 "stop" | "kill" => {
-                    runner.get(*id).stop();
+                    let mut item = runner.get(*id);
+                    item.stop();
+                    item.get_runner().save();
                     success.push(*id);
                 }
                 "delete" | "remove" => {
