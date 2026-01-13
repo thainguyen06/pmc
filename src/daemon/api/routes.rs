@@ -907,17 +907,26 @@ pub async fn test_notification_handler(body: Json<TestNotificationBody>, _t: Tok
             timer.observe_duration();
             Ok(Json(response))
         } else {
-            // Both methods failed
+            // All notification methods failed
             timer.observe_duration();
-            let mut all_errors = Vec::new();
-            all_errors.extend(warnings);  // Include desktop warnings in errors when nothing succeeded
-            all_errors.extend(errors);
             
-            let error_msg = if all_errors.is_empty() {
+            // Build clear error message distinguishing expected vs unexpected failures
+            let mut error_parts = Vec::new();
+            
+            if !warnings.is_empty() {
+                error_parts.push(format!("Expected failures (headless environment): {}", warnings.join("; ")));
+            }
+            
+            if !errors.is_empty() {
+                error_parts.push(format!("Unexpected failures: {}", errors.join("; ")));
+            }
+            
+            let error_msg = if error_parts.is_empty() {
                 "No notification channels available".to_string()
             } else {
-                format!("Failed to send notifications: {}", all_errors.join("; "))
+                format!("All notification methods failed. {}", error_parts.join(" | "))
             };
+            
             Err(generic_error(Status::InternalServerError, error_msg))
         }
     } else {
@@ -1020,7 +1029,12 @@ async fn send_discord_webhook(
     
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
+        // Only read response body for error responses, and limit size to prevent issues
+        let body = if status.is_client_error() || status.is_server_error() {
+            response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string())
+        } else {
+            "Non-success status but no error details available".to_string()
+        };
         return Err(format!("Discord webhook failed with status: {} - Response: {}", status, body).into());
     }
     
@@ -1051,7 +1065,12 @@ async fn send_slack_webhook(
     
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
+        // Only read response body for error responses, and limit size to prevent issues
+        let body = if status.is_client_error() || status.is_server_error() {
+            response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string())
+        } else {
+            "Non-success status but no error details available".to_string()
+        };
         return Err(format!("Slack webhook failed with status: {} - Response: {}", status, body).into());
     }
     
@@ -1092,7 +1111,12 @@ async fn send_telegram_message(
     
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
+        // Only read response body for error responses, and limit size to prevent issues
+        let body = if status.is_client_error() || status.is_server_error() {
+            response.text().await.unwrap_or_else(|_| "Unable to read response body".to_string())
+        } else {
+            "Non-success status but no error details available".to_string()
+        };
         return Err(format!("Telegram API failed with status: {} - Response: {}", status, body).into());
     }
     
