@@ -127,12 +127,12 @@ const NotificationSettings = (props: { base: string }) => {
 						</div>
 						<button
 							onClick={() => setSettings({ ...settings, enabled: !settings.enabled })}
-							className={`toggle-switch relative inline-flex h-5 w-9 items-center rounded-full transition ${
+							className={`toggle-switch relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 ${
 								settings.enabled ? 'bg-blue-600' : 'bg-zinc-700'
 							}`}>
 							<span
-								className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${
-									settings.enabled ? 'translate-x-[1.125rem]' : 'translate-x-1'
+								className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ${
+									settings.enabled ? 'translate-x-6' : 'translate-x-0.5'
 								}`}
 							/>
 						</button>
@@ -162,12 +162,12 @@ const NotificationSettings = (props: { base: string }) => {
 										}
 									})}
 									disabled={!settings.enabled}
-									className={`toggle-switch relative inline-flex h-5 w-9 items-center rounded-full transition ${
+									className={`toggle-switch relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 ${
 										value && settings.enabled ? 'bg-blue-600' : 'bg-zinc-700'
 									} disabled:opacity-50 disabled:cursor-not-allowed`}>
 									<span
-										className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${
-											value ? 'translate-x-[1.125rem]' : 'translate-x-1'
+										className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ${
+											value ? 'translate-x-6' : 'translate-x-0.5'
 										}`}
 									/>
 								</button>

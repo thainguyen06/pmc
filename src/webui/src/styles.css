@@ -195,3 +195,91 @@ button, a, input, select {
 	outline-offset: 2px;
 }
 
+/* Navbar entrance animation - center to left */
+@keyframes navSlideIn {
+	0% {
+		opacity: 0;
+		transform: translateX(0);
+		justify-content: center;
+	}
+	50% {
+		opacity: 0.5;
+		justify-content: center;
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+		justify-content: flex-start;
+	}
+}
+
+@keyframes navBrandSlideIn {
+	0% {
+		opacity: 0;
+		transform: translateX(calc(50vw - 50%));
+	}
+	50% {
+		opacity: 0.5;
+		transform: translateX(calc(50vw - 50%));
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes navItemsSlideIn {
+	0% {
+		opacity: 0;
+		transform: translateX(calc(50vw - 50%));
+	}
+	50% {
+		opacity: 0.5;
+		transform: translateX(calc(50vw - 50%));
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+.nav-container {
+	animation: navSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.nav-brand {
+	animation: navBrandSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.nav-items {
+	animation: navItemsSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Only apply animation on page load, not on subsequent view transitions */
+@media (prefers-reduced-motion: reduce) {
+	.nav-container, .nav-brand, .nav-items {
+		animation: none;
+	}
+}
+
+/* On small screens, keep centered layout */
+@media (max-width: 640px) {
+	@keyframes navSlideIn {
+		0%, 100% {
+			justify-content: center;
+		}
+	}
+	
+	@keyframes navBrandSlideIn {
+		0%, 100% {
+			transform: translateX(0);
+		}
+	}
+	
+	@keyframes navItemsSlideIn {
+		0%, 100% {
+			transform: translateX(0);
+		}
+	}
+}
+
