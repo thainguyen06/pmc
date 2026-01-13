@@ -1140,6 +1140,8 @@ impl<'i> Internal<'i> {
             runner.reset_counters(id);
         }
         runner.save();
+        
+        println!("{} Reset restart counters for all processes", *helpers::SUCCESS);
 
         Internal::list(&string!("default"), &list_name);
     }
