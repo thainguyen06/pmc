@@ -7,8 +7,21 @@ import { useEffect, useState, Fragment } from 'react';
 import { EllipsisVerticalIcon } from '@heroicons/react/20/solid';
 import { Menu, MenuItem, MenuItems, MenuButton, Transition } from '@headlessui/react';
 
+type ProcessItem = {
+	id: number;
+	name: string;
+	server: string;
+	status: string;
+	pid: string;
+	uptime: string;
+	restarts: number;
+	cpu: string;
+	mem: string;
+	watch: string;
+};
+
 const Index = (props: { base: string }) => {
-	const items = useArray([]);
+	const items = useArray<ProcessItem>([]);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [statusFilter, setStatusFilter] = useState('all');
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -36,9 +49,9 @@ const Index = (props: { base: string }) => {
 		} catch {}
 	}
 
-	const isRemote = (item: any): bool => (item.server == 'local' ? false : true);
-	const isRunning = (status: string): bool => (status == 'stopped' ? false : status == 'crashed' ? false : true);
-	const action = (item: any, name: string) => {
+	const isRemote = (item: ProcessItem): boolean => (item.server == 'local' ? false : true);
+	const isRunning = (status: string): boolean => (status == 'stopped' ? false : status == 'crashed' ? false : true);
+	const action = (item: ProcessItem, name: string) => {
 		const endpoint = item.server === 'local' 
 			? `${props.base}/process/${item.id}/action`
 			: `${props.base}/remote/${item.server}/action/${item.id}`;
