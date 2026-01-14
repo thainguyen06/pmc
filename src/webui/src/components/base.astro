@@ -24,6 +24,8 @@ const { title, description } = Astro.props;
 		<meta http-equiv="Expires" content="0" />
 	
 		<!-- Critical CSS for immediate rendering -->
+		<!-- Note: These rules are duplicated in styles.css for redundancy -->
+		<!-- Inline styles load first to prevent FOUC, CSS file provides fallback -->
 		<style is:global>
 			/* Toggle switch precision alignment - prevent misalignment */
 			.toggle-switch {
