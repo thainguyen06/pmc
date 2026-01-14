@@ -1047,6 +1047,18 @@ impl<'i> Internal<'i> {
             }
         }
 
+        // Reset restart and crash counters after restore for ALL processes in the system
+        // This gives each process a fresh start after system restore/reboot
+        // Both running and stopped processes get their counters reset so they have
+        // full restart attempts available
+        // Do this BEFORE checking if there are processes to restore, so counters are reset
+        // even when all processes are stopped
+        let all_process_ids: Vec<usize> = runner.items().keys().copied().collect();
+        for id in all_process_ids {
+            runner.reset_counters(id);
+        }
+        runner.save();
+
         let mut restored_ids = Vec::new();
         let mut failed_ids = Vec::new();
 
@@ -1065,6 +1077,7 @@ impl<'i> Internal<'i> {
 
         if processes_to_restore.is_empty() {
             println!("{} No processes to restore", *helpers::SUCCESS);
+            Internal::list(&string!("default"), &list_name);
             return;
         }
 
@@ -1130,16 +1143,6 @@ impl<'i> Internal<'i> {
                 // Don't auto-save here - save will happen at the end of restore
             }
         }
-
-        // Reset restart and crash counters after restore for ALL processes in the system
-        // This gives each process a fresh start after system restore/reboot
-        // Both running and stopped processes get their counters reset so they have
-        // full restart attempts available
-        let all_process_ids: Vec<usize> = runner.items().keys().copied().collect();
-        for id in all_process_ids {
-            runner.reset_counters(id);
-        }
-        runner.save();
 
         Internal::list(&string!("default"), &list_name);
     }

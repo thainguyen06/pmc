@@ -118,7 +118,7 @@ const NotificationSettings = (props: { base: string }) => {
 			<div className="space-y-6">
 				{/* Master Toggle */}
 				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
-					<div className="flex items-start justify-between gap-4">
+					<div className="flex items-center justify-between gap-4">
 						<div>
 							<h3 className="text-lg font-semibold text-zinc-200">Enable Notifications</h3>
 							<p className="text-sm text-zinc-400 mt-1">
@@ -144,7 +144,7 @@ const NotificationSettings = (props: { base: string }) => {
 					<h3 className="text-lg font-semibold text-zinc-200 mb-4">Event Types</h3>
 					<div className="space-y-4">
 						{Object.entries(settings.events).map(([key, value]) => (
-							<div key={key} className="flex items-start justify-between gap-4">
+							<div key={key} className="flex items-center justify-between gap-4">
 								<div>
 									<div className="text-sm font-medium text-zinc-200">
 										{key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
