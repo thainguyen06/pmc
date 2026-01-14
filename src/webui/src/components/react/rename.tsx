@@ -28,7 +28,10 @@ const Rename = (props: { base: string; server: string; process_id: number; callb
 	return (
 		<Fragment>
 			<a
-				onClick={() => setOpen(true)}
+				onClick={(e) => {
+					e.stopPropagation();
+					setOpen(true);
+				}}
 				className="text-zinc-200 rounded-md block p-2 w-full text-left cursor-pointer hover:bg-zinc-800/80 hover:text-zinc-50">
 				Rename
 			</a>

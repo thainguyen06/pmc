@@ -408,7 +408,7 @@ const View = (props: { id: string; base: string }) => {
 												)}
 											</MenuItem>
 											<MenuItem>
-												{({ focus }) => <Rename server={server} base={props.base} process_id={props.id} active={focus} old={item.info.name} />}
+												{({ focus }) => <Rename server={server} base={props.base} process_id={props.id} callback={openConnection} old={item.info.name} />}
 											</MenuItem>
 											<MenuItem>
 												{({ _ }) => (
