@@ -5,6 +5,12 @@ import Header from '@/components/react/header';
 import ToastContainer from '@/components/react/toast';
 import { useToast } from '@/components/react/useToast';
 
+// Toggle switch common styles
+const TOGGLE_BASE_CLASSES = "toggle-switch relative inline-flex h-5 w-9 flex-shrink-0 items-center justify-start rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900";
+const TOGGLE_PIN_CLASSES = "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200";
+const getToggleClasses = (enabled: boolean) => `${TOGGLE_BASE_CLASSES} ${enabled ? 'bg-blue-600' : 'bg-zinc-700'}`;
+const getTogglePinClasses = (enabled: boolean) => `${TOGGLE_PIN_CLASSES} ${enabled ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`;
+
 const NotificationSettings = (props: { base: string }) => {
 	const { toasts, closeToast, success, error } = useToast();
 	const [loading, setLoading] = useState(true);
@@ -133,16 +139,10 @@ const NotificationSettings = (props: { base: string }) => {
 							<button
 								type="button"
 								onClick={() => setSettings({ ...settings, enabled: !settings.enabled })}
-								className={`toggle-switch relative inline-flex h-5 w-9 flex-shrink-0 items-center justify-start rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900 ${
-									settings.enabled ? 'bg-blue-600' : 'bg-zinc-700'
-								}`}
+								className={getToggleClasses(settings.enabled)}
 								role="switch"
 								aria-checked={settings.enabled}>
-								<span
-									className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-										settings.enabled ? 'translate-x-[1.125rem]' : 'translate-x-0.5'
-									}`}
-								/>
+								<span className={getTogglePinClasses(settings.enabled)} />
 							</button>
 						</div>
 					</div>
@@ -173,16 +173,10 @@ const NotificationSettings = (props: { base: string }) => {
 											}
 										})}
 										disabled={!settings.enabled}
-										className={`toggle-switch relative inline-flex h-5 w-9 flex-shrink-0 items-center justify-start rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900 ${
-											value && settings.enabled ? 'bg-blue-600' : 'bg-zinc-700'
-										} disabled:opacity-50 disabled:cursor-not-allowed`}
+										className={`${getToggleClasses(value && settings.enabled)} disabled:opacity-50 disabled:cursor-not-allowed`}
 										role="switch"
 										aria-checked={value}>
-										<span
-											className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-												value ? 'translate-x-[1.125rem]' : 'translate-x-0.5'
-											}`}
-										/>
+										<span className={getTogglePinClasses(value)} />
 									</button>
 								</div>
 							</div>

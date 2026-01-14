@@ -5,12 +5,13 @@ const Modal = (props: { show: boolean; callback: any; title: string; children: a
 	// Prevent modal from closing on window resize (mobile keyboard fix)
 	useEffect(() => {
 		const handleResize = (e: Event) => {
-			// Prevent default resize behavior that might close the modal
+			// Prevent default resize behavior and stop propagation
+			e.preventDefault();
 			e.stopPropagation();
 		};
 		
 		if (props.show) {
-			window.addEventListener('resize', handleResize, { capture: true });
+			window.addEventListener('resize', handleResize, { capture: true, passive: false });
 		}
 		
 		return () => {
