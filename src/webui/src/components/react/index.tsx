@@ -30,6 +30,7 @@ const Index = (props: { base: string }) => {
 	const [statusFilter, setStatusFilter] = useState('all');
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 	const [showBulkActions, setShowBulkActions] = useState(false);
+	const [loading, setLoading] = useState(true);
 
 	const badge = {
 		online: 'bg-emerald-400',
@@ -38,19 +39,23 @@ const Index = (props: { base: string }) => {
 	};
 
 	async function fetch() {
-		items.clear();
-		setSelectedIds(new Set()); // Clear selections on refresh
-
-		const res = await api.get(props.base + '/list').json();
-		res.map((s) => items.push({ ...s, server: 'local' }));
-
 		try {
-			const servers = await api.get(props.base + '/daemon/servers').json();
-			await servers.forEach(async (name) => {
-				const remote = await api.get(props.base + `/remote/${name}/list`).json();
-				remote.map((s) => items.push({ ...s, server: name }));
-			});
-		} catch {}
+			items.clear();
+			setSelectedIds(new Set()); // Clear selections on refresh
+
+			const res = await api.get(props.base + '/list').json();
+			res.map((s) => items.push({ ...s, server: 'local' }));
+
+			try {
+				const servers = await api.get(props.base + '/daemon/servers').json();
+				await servers.forEach(async (name) => {
+					const remote = await api.get(props.base + `/remote/${name}/list`).json();
+					remote.map((s) => items.push({ ...s, server: name }));
+				});
+			} catch {}
+		} finally {
+			setLoading(false);
+		}
 	}
 
 	const isRemote = (item: ProcessItem): boolean => item.server !== 'local';
@@ -172,8 +177,36 @@ const Index = (props: { base: string }) => {
 		fetch();
 	}, []);
 
-	if (items.isEmpty()) {
+	if (loading) {
 		return <Loader />;
+	}
+
+	if (items.isEmpty()) {
+		return (
+			<Fragment>
+				<ToastContainer toasts={toasts} onClose={closeToast} />
+				<Header name="No processes running" description="Start managing your processes with OPM.">
+					<button
+						type="button"
+						onClick={fetch}
+						className="transition inline-flex items-center justify-center space-x-1.5 border focus:outline-none focus:ring-0 focus:ring-offset-0 focus:z-10 shrink-0 border-zinc-900 hover:border-zinc-800 bg-zinc-950 text-zinc-50 hover:bg-zinc-900 px-4 py-2 text-sm font-semibold rounded-lg">
+						Refresh
+					</button>
+				</Header>
+				<div className="text-center py-12 px-4">
+					<div className="text-zinc-400 text-lg mb-4">No processes are currently running</div>
+					<div className="text-zinc-500 text-sm space-y-2 max-w-2xl mx-auto">
+						<p>Start a new process using the OPM CLI:</p>
+						<code className="block bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-left text-zinc-300 font-mono text-sm mt-4">
+							opm start &lt;script&gt; --name &lt;name&gt;
+						</code>
+						<p className="mt-4 text-xs text-zinc-400">
+							For more commands, run: <code className="bg-zinc-800 px-2 py-1 rounded">opm --help</code>
+						</p>
+					</div>
+				</div>
+			</Fragment>
+		);
 	} else {
 		return (
 			<Fragment>
