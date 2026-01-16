@@ -126,8 +126,9 @@ const Index = (props: { base: string }) => {
 					</thead>
 					<tbody className="divide-y divide-white/5 border-b border-white/5">
 						{agents.value.map((agent: any) => {
-							const isOnline = agent.last_heartbeat && 
-								(Date.now() - new Date(agent.last_heartbeat).getTime()) < 30000; // 30 seconds threshold
+							// Backend sends last_seen as seconds since UNIX epoch
+							const isOnline = agent.last_seen && 
+								(Date.now() - agent.last_seen * 1000) < 60000; // 60 seconds threshold (2x heartbeat interval)
 							
 							return (
 								<tr 
@@ -162,8 +163,8 @@ const Index = (props: { base: string }) => {
 										</div>
 									</td>
 									<td className="hidden py-4 pl-0 pr-8 text-sm leading-6 text-gray-400 md:table-cell lg:pr-20">
-										{agent.last_heartbeat 
-											? new Date(agent.last_heartbeat).toLocaleString()
+										{agent.last_seen 
+											? new Date(agent.last_seen * 1000).toLocaleString()
 											: 'Never'}
 									</td>
 									<td className="py-4 pl-0 pr-4 sm:pr-8 lg:pr-20">
