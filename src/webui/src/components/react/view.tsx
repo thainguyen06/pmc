@@ -341,7 +341,7 @@ const View = (props: { id: string; base: string }) => {
 									ref={renameRef}
 									base={props.base} 
 									server={server} 
-									process_id={props.id} 
+									process_id={parseInt(props.id)} 
 									callback={openConnection} 
 									old={item.info.name} 
 									onSuccess={success} 
