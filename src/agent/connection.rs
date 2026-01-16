@@ -92,6 +92,11 @@ impl AgentConnection {
                         println!("[Agent] Heartbeat sent successfully");
                     } else {
                         let status = response.status();
+                        // If agent was removed from server (404), exit gracefully instead of reconnecting
+                        if status == reqwest::StatusCode::NOT_FOUND {
+                            eprintln!("[Agent] Agent has been removed from server. Disconnecting...");
+                            std::process::exit(0);
+                        }
                         eprintln!("[Agent] Heartbeat failed with status: {}", status);
                         return Err(anyhow!("Heartbeat failed with status: {}", status));
                     }

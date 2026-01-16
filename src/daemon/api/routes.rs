@@ -1794,7 +1794,12 @@ pub async fn agent_heartbeat_handler(
     let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_heartbeat"]).start_timer();
     HTTP_COUNTER.inc();
 
-    registry.update_heartbeat(&body.id);
+    // Return 404 if agent not found (removed from registry)
+    if !registry.update_heartbeat(&body.id) {
+        timer.observe_duration();
+        return Err(not_found("Agent not found"));
+    }
+    
     timer.observe_duration();
 
     Ok(Json(json!({

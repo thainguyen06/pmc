@@ -49,10 +49,18 @@ const Index = (props: { base: string }) => {
 
 			try {
 				const servers = await api.get(props.base + '/daemon/servers').json();
-				await servers.forEach(async (name) => {
-					const remote = await api.get(props.base + `/remote/${name}/list`).json();
-					remote.map((s) => items.push({ ...s, server: name }));
+				// Use Promise.all for parallel fetching instead of sequential forEach
+				const remotePromises = servers.map(async (name) => {
+					try {
+						const remote = await api.get(props.base + `/remote/${name}/list`).json();
+						return remote.map((s) => ({ ...s, server: name }));
+					} catch (err) {
+						console.error(`Failed to fetch processes from remote ${name}:`, err);
+						return [];
+					}
 				});
+				const remoteResults = await Promise.all(remotePromises);
+				remoteResults.flat().forEach((item) => items.push(item));
 			} catch {}
 		} finally {
 			setLoading(false);
@@ -409,6 +417,21 @@ const Index = (props: { base: string }) => {
 															className="text-zinc-200 rounded-md block p-2 w-full text-left cursor-pointer hover:bg-zinc-800/80 hover:text-zinc-50">
 															Clean Logs
 														</a>
+													)}
+												</MenuItem>
+											</div>
+											<div className="p-1.5">
+												<MenuItem>
+													{({ _ }) => (
+														<Rename 
+															base={props.base}
+															server={item.server}
+															process_id={item.id}
+															callback={fetch}
+															old={item.name}
+															onSuccess={success}
+															onError={error}
+														/>
 													)}
 												</MenuItem>
 											</div>
