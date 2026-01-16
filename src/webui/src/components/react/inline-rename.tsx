@@ -91,18 +91,18 @@ const InlineRename = (props: InlineRenameProps) => {
 					e.stopPropagation();
 					handleSave();
 				}}
-				className="p-1 bg-green-600 hover:bg-green-700 rounded text-white transition-colors"
+				className="p-1.5 bg-green-600 hover:bg-green-700 rounded text-white transition-colors shadow-sm hover:shadow-md"
 				title="Save">
-				<CheckIcon className="h-4 w-4" />
+				<CheckIcon className="h-5 w-5" />
 			</button>
 			<button
 				onClick={(e) => {
 					e.stopPropagation();
 					handleCancel();
 				}}
-				className="p-1 bg-red-600 hover:bg-red-700 rounded text-white transition-colors"
+				className="p-1.5 bg-red-600 hover:bg-red-700 rounded text-white transition-colors shadow-sm hover:shadow-md"
 				title="Cancel">
-				<XMarkIcon className="h-4 w-4" />
+				<XMarkIcon className="h-5 w-5" />
 			</button>
 		</div>
 	);

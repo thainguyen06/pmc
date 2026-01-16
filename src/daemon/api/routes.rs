@@ -1312,23 +1312,27 @@ pub async fn create_handler(body: Json<CreateBody>, _t: Token) -> Result<Json<Ac
 )]
 pub async fn rename_handler(id: usize, body: String, _t: Token) -> Result<Json<ActionResponse>, NotFound> {
     let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["rename"]).start_timer();
-    let runner = Runner::new();
+    let mut runner = Runner::new();
 
-    match runner.clone().info(id) {
-        Some(process) => {
-            HTTP_COUNTER.inc();
-            let mut item = runner.clone().get(id);
-            item.rename(body.trim().replace("\n", ""));
-            then!(process.running, item.restart(true));  // API rename+restart should increment
-            runner.save();  // Persist the renamed process to dump file
-            timer.observe_duration();
-            Ok(Json(attempt(true, "rename")))
-        }
+    // Check if process exists and get its running status
+    let is_running = match runner.info(id) {
+        Some(process) => process.running,
         None => {
             timer.observe_duration();
-            Err(not_found("Process was not found"))
+            return Err(not_found("Process was not found"));
         }
+    };
+
+    HTTP_COUNTER.inc();
+    // Rename directly on the runner
+    runner.rename(id, body.trim().replace("\n", ""));
+    // Restart if needed
+    if is_running {
+        runner.restart(id, false, true);  // API rename+restart should increment
     }
+    runner.save();  // Persist the renamed process to dump file
+    timer.observe_duration();
+    Ok(Json(attempt(true, "rename")))
 }
 
 #[get("/process/<id>/env")]
@@ -1794,7 +1798,12 @@ pub async fn agent_heartbeat_handler(
     let timer = HTTP_REQ_HISTOGRAM.with_label_values(&["agent_heartbeat"]).start_timer();
     HTTP_COUNTER.inc();
 
-    registry.update_heartbeat(&body.id);
+    // Return 404 if agent not found (removed from registry)
+    if !registry.update_heartbeat(&body.id) {
+        timer.observe_duration();
+        return Err(not_found("Agent not found"));
+    }
+    
     timer.observe_duration();
 
     Ok(Json(json!({

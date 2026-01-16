@@ -34,10 +34,13 @@ impl AgentRegistry {
         agents.values().cloned().collect()
     }
 
-    pub fn update_heartbeat(&self, id: &str) {
+    pub fn update_heartbeat(&self, id: &str) -> bool {
         let mut agents = self.agents.write().unwrap();
         if let Some(agent) = agents.get_mut(id) {
             agent.last_seen = std::time::SystemTime::now();
+            true
+        } else {
+            false
         }
     }
 }
