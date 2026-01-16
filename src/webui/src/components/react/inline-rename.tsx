@@ -1,6 +1,6 @@
 import { api } from '@/api';
 import { useEffect, useState, useRef } from 'react';
-import { CheckIcon, XMarkIcon, PencilIcon } from '@heroicons/react/20/solid';
+import { CheckIcon, XMarkIcon } from '@heroicons/react/20/solid';
 
 interface InlineRenameProps {
 	base: string;
@@ -62,21 +62,16 @@ const InlineRename = (props: InlineRenameProps) => {
 
 	if (!isEditing) {
 		return (
-			<div className="flex items-center gap-2">
-				<span className="text-md font-bold text-zinc-200 truncate">
-					{props.old}
-				</span>
-				<button
-					onClick={(e) => {
-						e.preventDefault();
-						e.stopPropagation();
-						setIsEditing(true);
-					}}
-					className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200"
-					title="Rename">
-					<PencilIcon className="h-4 w-4" />
-				</button>
-			</div>
+			<span 
+				onClick={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					setIsEditing(true);
+				}}
+				className="text-md font-bold text-zinc-200 truncate cursor-pointer hover:text-blue-400 transition-colors"
+				title="Click to rename">
+				{props.old}
+			</span>
 		);
 	}
 
