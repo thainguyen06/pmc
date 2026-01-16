@@ -408,6 +408,7 @@ fn remove_agent_config() -> Result<(), std::io::Error> {
 
 fn start_agent_daemon() {
     use opm::helpers;
+    use opm::agent::connection::AgentConnection;
     use nix::unistd::{fork, ForkResult, setsid};
     use std::fs::OpenOptions;
     use std::os::unix::io::AsRawFd;
@@ -430,7 +431,11 @@ fn start_agent_daemon() {
             // Redirect stdin to /dev/null
             if let Ok(devnull) = OpenOptions::new().read(true).open("/dev/null") {
                 let fd = devnull.as_raw_fd();
-                unsafe { libc::dup2(fd, 0); }
+                let result = unsafe { libc::dup2(fd, 0) };
+                if result == -1 {
+                    eprintln!("Failed to redirect stdin");
+                    std::process::exit(1);
+                }
             }
             
             // Redirect stdout and stderr to agent log file
@@ -444,16 +449,21 @@ fn start_agent_daemon() {
                 .open(&log_path)
             {
                 let log_fd = log_file.as_raw_fd();
-                unsafe {
-                    libc::dup2(log_fd, 1); // Redirect stdout to log file
-                    libc::dup2(log_fd, 2); // Redirect stderr to log file
+                let result1 = unsafe { libc::dup2(log_fd, 1) };
+                if result1 == -1 {
+                    eprintln!("Failed to redirect stdout");
+                    std::process::exit(1);
+                }
+                let result2 = unsafe { libc::dup2(log_fd, 2) };
+                if result2 == -1 {
+                    eprintln!("Failed to redirect stderr");
+                    std::process::exit(1);
                 }
             }
             
             // Run agent connection in this child process
             match load_agent_config() {
                 Ok(config) => {
-                    use opm::agent::connection::AgentConnection;
                     let runtime = tokio::runtime::Runtime::new().unwrap();
                     runtime.block_on(async {
                         let mut connection = AgentConnection::new(config);
