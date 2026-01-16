@@ -1320,6 +1320,7 @@ pub async fn rename_handler(id: usize, body: String, _t: Token) -> Result<Json<A
             let mut item = runner.get(id);
             item.rename(body.trim().replace("\n", ""));
             then!(process.running, item.restart(true));  // API rename+restart should increment
+            runner.save();  // Persist the renamed process to dump file
             timer.observe_duration();
             Ok(Json(attempt(true, "rename")))
         }
