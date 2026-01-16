@@ -1,5 +1,6 @@
 import { api } from '@/api';
 import Rename from '@/components/react/rename';
+import InlineRename from '@/components/react/inline-rename';
 import Loader from '@/components/react/loader';
 import Header from '@/components/react/header';
 import { useArray, classNames } from '@/helpers';
@@ -303,7 +304,7 @@ const Index = (props: { base: string }) => {
 
 				<ul role="list" className="px-4 sm:px-6 lg:px-8 pb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 xl:gap-8 fade-in">
 					{filteredItems.map((item) => (
-						<li key={item.id + item.name} className="rounded-xl border border-zinc-700/50 bg-zinc-900/10 hover:bg-zinc-900/40 hover:border-zinc-600 relative transition-all duration-300 card-hover shadow-lg hover:shadow-2xl overflow-hidden">
+						<li key={item.id + item.name} className="group rounded-xl border border-zinc-700/50 bg-zinc-900/10 hover:bg-zinc-900/40 hover:border-zinc-600 relative transition-all duration-300 card-hover shadow-lg hover:shadow-2xl overflow-hidden">
 							{/* Selection checkbox */}
 							<div className="absolute top-3 left-3 z-10">
 								<input
@@ -317,10 +318,18 @@ const Index = (props: { base: string }) => {
 								/>
 							</div>
 							<div className="flex items-center gap-x-4 border-b border-zinc-800/80 bg-zinc-900/30 px-4 py-3.5 pl-12 rounded-t-xl backdrop-blur-sm">
-								<span className="text-md font-bold text-zinc-200 truncate flex-1">
-									{item.name}
+								<div className="flex-1 min-w-0">
+									<InlineRename 
+										base={props.base} 
+										server={item.server} 
+										process_id={item.id} 
+										callback={fetch} 
+										old={item.name} 
+										onSuccess={success} 
+										onError={error} 
+									/>
 									<div className="text-xs font-medium text-zinc-400 mt-0.5">{item.server != 'local' ? item.server : 'Internal'}</div>
-								</span>
+								</div>
 								<span className="relative flex h-2.5 w-2.5 -mt-3.5">
 									<span className={`${badge[item.status]} absolute inline-flex h-full w-full rounded-full opacity-75 ${item.status === 'online' ? 'animate-ping' : ''}`}></span>
 									<span className={`${badge[item.status]} relative inline-flex rounded-full h-2.5 w-2.5 shadow-lg`}></span>
@@ -393,9 +402,6 @@ const Index = (props: { base: string }) => {
 												</MenuItem>
 											</div>
 											<div className="p-1.5">
-												<MenuItem>
-													{({ _ }) => <Rename base={props.base} server={item.server} process_id={item.id} callback={fetch} old={item.name} onSuccess={success} onError={error} />}
-												</MenuItem>
 												<MenuItem>
 													{({ _ }) => (
 														<a
