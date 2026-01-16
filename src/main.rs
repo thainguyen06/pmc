@@ -308,7 +308,6 @@ fn agent_list() {
 fn agent_connect(server_url: String, name: Option<String>, token: Option<String>) {
     use opm::helpers;
     use opm::agent::types::AgentConfig;
-    use opm::agent::connection::AgentConnection;
     
     println!("{} Starting OPM Agent...", *helpers::SUCCESS);
     
@@ -327,14 +326,8 @@ fn agent_connect(server_url: String, name: Option<String>, token: Option<String>
     println!("{} Agent Name: {}", *helpers::SUCCESS, config.name);
     println!("{} Server URL: {}", *helpers::SUCCESS, config.server_url);
     
-    // Start agent in async runtime
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    runtime.block_on(async {
-        let mut connection = AgentConnection::new(config);
-        if let Err(e) = connection.run().await {
-            eprintln!("{} Agent error: {}", *helpers::FAIL, e);
-        }
-    });
+    // Start agent in background
+    start_agent_daemon();
 }
 
 fn agent_disconnect() {
@@ -413,6 +406,49 @@ fn remove_agent_config() -> Result<(), std::io::Error> {
     Ok(())
 }
 
+fn start_agent_daemon() {
+    use opm::helpers;
+    
+    // Fork a background process that will run the agent
+    match unsafe { libc::fork() } {
+        -1 => {
+            eprintln!("{} Failed to fork agent process", *helpers::FAIL);
+        }
+        0 => {
+            // Child process - run the agent
+            unsafe { libc::setsid() };
+            
+            // Close standard file descriptors
+            unsafe {
+                libc::close(0);
+                libc::close(1);
+                libc::close(2);
+            }
+            
+            // Run agent connection in this child process
+            match load_agent_config() {
+                Ok(config) => {
+                    use opm::agent::connection::AgentConnection;
+                    let runtime = tokio::runtime::Runtime::new().unwrap();
+                    runtime.block_on(async {
+                        let mut connection = AgentConnection::new(config);
+                        if let Err(_e) = connection.run().await {
+                            // Silent error in background
+                        }
+                    });
+                }
+                Err(_) => {
+                    std::process::exit(1);
+                }
+            }
+        }
+        pid => {
+            // Parent process
+            println!("{} Agent started in background (PID: {})", *helpers::SUCCESS, pid);
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
     let mut env = env_logger::Builder::new();
@@ -466,6 +502,12 @@ fn main() {
                     }
                 }
             }
+            
+            // Auto-start agent if config exists
+            if load_agent_config().is_ok() {
+                start_agent_daemon();
+            }
+            
             Internal::restore(&defaults(server))
         },
         Commands::Save { server } => Internal::save(&defaults(server)),
