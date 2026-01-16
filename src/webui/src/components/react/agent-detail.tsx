@@ -49,8 +49,9 @@ const AgentDetail = (props: { agentId: string; base: string }) => {
 	}
 
 	// Backend sends last_seen as seconds since UNIX epoch
+	// Heartbeat interval is 30s by default, so we use 60s threshold (2x) to account for network delays
 	const isOnline = agent.last_seen && 
-		(Date.now() - agent.last_seen * 1000) < 60000; // 60 seconds threshold (2x heartbeat interval)
+		(Date.now() - agent.last_seen * 1000) < 60000; // 60 seconds threshold (2x 30s heartbeat interval)
 
 	return (
 		<Fragment>

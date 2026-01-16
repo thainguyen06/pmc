@@ -140,6 +140,8 @@ impl NotificationManager {
         message: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Discord webhook URL format: token@id or full webhook URL
+        // NOTE: The webhook token will appear in server access logs when using URL path construction.
+        // For production use, consider using Discord's webhook API with proper authentication headers.
         let webhook_url = if webhook_data.starts_with("http") {
             webhook_data.to_string()
         } else {
