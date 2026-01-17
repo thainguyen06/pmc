@@ -21,6 +21,8 @@ type ProcessItem = {
 	cpu: string;
 	mem: string;
 	watch: string;
+	agent_id?: string;
+	agent_name?: string;
 };
 
 const Index = (props: { base: string }) => {
@@ -28,6 +30,7 @@ const Index = (props: { base: string }) => {
 	const items = useArray<ProcessItem>([]);
 	const [searchTerm, setSearchTerm] = useState('');
 	const [statusFilter, setStatusFilter] = useState('all');
+	const [agentFilter, setAgentFilter] = useState('all');
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 	const [showBulkActions, setShowBulkActions] = useState(false);
 	const [loading, setLoading] = useState(true);
@@ -171,16 +174,28 @@ const Index = (props: { base: string }) => {
 		}
 	};
 
-	// Filter items based on search term and status filter
+	// Filter items based on search term, status filter, and agent filter
 	const filteredItems = items.value.filter((item) => {
 		const matchesSearch = searchTerm === '' || 
 			item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			item.server.toLowerCase().includes(searchTerm.toLowerCase());
+			item.server.toLowerCase().includes(searchTerm.toLowerCase()) ||
+			(item.agent_name && item.agent_name.toLowerCase().includes(searchTerm.toLowerCase()));
 		
 		const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
 		
-		return matchesSearch && matchesStatus;
+		const matchesAgent = agentFilter === 'all' || 
+			(agentFilter === 'local' && !item.agent_id) ||
+			item.agent_id === agentFilter;
+		
+		return matchesSearch && matchesStatus && matchesAgent;
 	});
+
+	// Get unique agent IDs and names for the filter dropdown
+	const agents = Array.from(new Set(
+		items.value
+			.filter(item => item.agent_id)
+			.map(item => JSON.stringify({ id: item.agent_id, name: item.agent_name || item.agent_id }))
+	)).map(str => JSON.parse(str));
 
 	useEffect(() => {
 		fetch();
@@ -289,10 +304,10 @@ const Index = (props: { base: string }) => {
 					<div className="flex-1">
 						<input
 							type="text"
-							placeholder="Search by name or server..."
+							placeholder="Search by name, server, or agent..."
 							value={searchTerm}
 							onChange={(e) => setSearchTerm(e.target.value)}
-							aria-label="Search processes by name or server"
+							aria-label="Search processes by name, server, or agent"
 							className="w-full px-4 py-2.5 bg-zinc-900/50 border border-zinc-700/50 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
 						/>
 					</div>
@@ -306,6 +321,21 @@ const Index = (props: { base: string }) => {
 							<option value="online">Online</option>
 							<option value="stopped">Stopped</option>
 							<option value="crashed">Crashed</option>
+						</select>
+					</div>
+					<div className="sm:w-auto w-full">
+						<select
+							value={agentFilter}
+							onChange={(e) => setAgentFilter(e.target.value)}
+							aria-label="Filter processes by agent"
+							className="w-full sm:w-auto px-4 py-2.5 bg-zinc-900/50 border border-zinc-700/50 rounded-lg text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all">
+							<option value="all">All Agents</option>
+							<option value="local">Local Only</option>
+							{agents.map((agent) => (
+								<option key={agent.id} value={agent.id}>
+									{agent.name}
+								</option>
+							))}
 						</select>
 					</div>
 				</div>
@@ -343,7 +373,14 @@ const Index = (props: { base: string }) => {
 										onSuccess={success} 
 										onError={error} 
 									/>
-									<div className="text-xs font-medium text-zinc-400 mt-0.5">{item.server != 'local' ? item.server : 'Internal'}</div>
+									<div className="flex items-center gap-2 mt-0.5">
+										<div className="text-xs font-medium text-zinc-400">{item.server != 'local' ? item.server : 'Internal'}</div>
+										{item.agent_name && (
+											<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+												{item.agent_name}
+											</span>
+										)}
+									</div>
 								</div>
 								<span className="relative flex h-2.5 w-2.5 -mt-3.5">
 									<span className={`${badge[item.status]} absolute inline-flex h-full w-full rounded-full opacity-75 ${item.status === 'online' ? 'animate-ping' : ''}`}></span>
