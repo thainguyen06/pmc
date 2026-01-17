@@ -3,7 +3,7 @@ import InlineRename from '@/components/react/inline-rename';
 import Loader from '@/components/react/loader';
 import Header from '@/components/react/header';
 import { useArray, classNames } from '@/helpers';
-import { useEffect, useState, Fragment, useRef } from 'react';
+import { useEffect, useState, Fragment, useRef, useMemo } from 'react';
 import { EllipsisVerticalIcon } from '@heroicons/react/20/solid';
 import { Menu, MenuItem, MenuItems, MenuButton, Transition } from '@headlessui/react';
 import ToastContainer from '@/components/react/toast';
@@ -191,11 +191,18 @@ const Index = (props: { base: string }) => {
 	});
 
 	// Get unique agent IDs and names for the filter dropdown
-	const agents = Array.from(new Set(
-		items.value
-			.filter(item => item.agent_id)
-			.map(item => JSON.stringify({ id: item.agent_id, name: item.agent_name || item.agent_id }))
-	)).map(str => JSON.parse(str));
+	const agents = useMemo(() => {
+		const agentMap = new Map<string, { id: string; name: string }>();
+		items.value.forEach(item => {
+			if (item.agent_id && !agentMap.has(item.agent_id)) {
+				agentMap.set(item.agent_id, {
+					id: item.agent_id,
+					name: item.agent_name || item.agent_id
+				});
+			}
+		});
+		return Array.from(agentMap.values());
+	}, [items.value]);
 
 	useEffect(() => {
 		fetch();
