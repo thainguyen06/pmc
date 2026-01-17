@@ -1043,7 +1043,6 @@ impl<'i> Internal<'i> {
                         }
                     }
                 }
-                println!("{} Cleared log folder", *helpers::SUCCESS);
             }
         }
 

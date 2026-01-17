@@ -441,9 +441,9 @@ const View = (props: { id: string; base: string }) => {
 														}}
 														className={classNames(
 															focus ? 'bg-zinc-800/80 text-zinc-50' : 'text-zinc-200',
-															'rounded-md flex items-center gap-2 p-2 w-full text-left cursor-pointer'
+															'rounded-md block p-2 w-full text-left cursor-pointer'
 														)}>
-														<span>Rename</span>
+														Rename
 													</button>
 												)}
 											</MenuItem>

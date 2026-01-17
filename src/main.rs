@@ -415,9 +415,8 @@ fn start_agent_daemon() {
     
     // Fork a background process that will run the agent
     match unsafe { fork() } {
-        Ok(ForkResult::Parent { child }) => {
+        Ok(ForkResult::Parent { child: _ }) => {
             // Parent process
-            println!("{} Agent started in background (PID: {})", *helpers::SUCCESS, child);
         }
         Ok(ForkResult::Child) => {
             // Child process - run the agent
