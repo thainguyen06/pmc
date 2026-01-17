@@ -9,7 +9,7 @@ import { useToast } from '@/components/react/useToast';
 const TOGGLE_BASE_CLASSES = "toggle-switch relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900";
 const TOGGLE_PIN_CLASSES = "inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 leading-none flex-shrink-0";
 const getToggleClasses = (enabled: boolean) => `${TOGGLE_BASE_CLASSES} ${enabled ? 'bg-blue-600' : 'bg-zinc-700'}`;
-const getTogglePinClasses = (enabled: boolean) => `${TOGGLE_PIN_CLASSES} ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`;
+const getTogglePinClasses = (enabled: boolean) => `${TOGGLE_PIN_CLASSES} ${enabled ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`;
 
 const NotificationSettings = (props: { base: string }) => {
 	const { toasts, closeToast, success, error } = useToast();
