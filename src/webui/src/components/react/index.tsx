@@ -1,10 +1,9 @@
 import { api } from '@/api';
-import Rename from '@/components/react/rename';
 import InlineRename from '@/components/react/inline-rename';
 import Loader from '@/components/react/loader';
 import Header from '@/components/react/header';
 import { useArray, classNames } from '@/helpers';
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useState, Fragment, useRef } from 'react';
 import { EllipsisVerticalIcon } from '@heroicons/react/20/solid';
 import { Menu, MenuItem, MenuItems, MenuButton, Transition } from '@headlessui/react';
 import ToastContainer from '@/components/react/toast';
@@ -32,6 +31,7 @@ const Index = (props: { base: string }) => {
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 	const [showBulkActions, setShowBulkActions] = useState(false);
 	const [loading, setLoading] = useState(true);
+	const renameRefs = useRef<Map<number, { triggerEdit: () => void }>>(new Map());
 
 	const badge = {
 		online: 'bg-emerald-400',
@@ -328,6 +328,9 @@ const Index = (props: { base: string }) => {
 							<div className="flex items-center gap-x-4 border-b border-zinc-800/80 bg-zinc-900/30 px-4 py-3.5 pl-12 rounded-t-xl backdrop-blur-sm">
 								<div className="flex-1 min-w-0">
 									<InlineRename 
+										ref={(el) => {
+											if (el) renameRefs.current.set(item.id, el);
+										}}
 										base={props.base} 
 										server={item.server} 
 										process_id={item.id} 
@@ -422,16 +425,19 @@ const Index = (props: { base: string }) => {
 											</div>
 											<div className="p-1.5">
 												<MenuItem>
-													{({ _ }) => (
-														<Rename 
-															base={props.base}
-															server={item.server}
-															process_id={item.id}
-															callback={fetch}
-															old={item.name}
-															onSuccess={success}
-															onError={error}
-														/>
+													{({ focus }) => (
+														<button
+															onClick={(e) => {
+																e.preventDefault();
+																e.stopPropagation();
+																renameRefs.current.get(item.id)?.triggerEdit();
+															}}
+															className={classNames(
+																focus ? 'bg-zinc-800/80 text-zinc-50' : 'text-zinc-200',
+																'rounded-md block p-2 w-full text-left cursor-pointer'
+															)}>
+															Rename
+														</button>
 													)}
 												</MenuItem>
 											</div>
