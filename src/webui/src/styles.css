@@ -79,7 +79,8 @@ button[role="switch"] > span,
 
 /* Pin translation when checked */
 /* Translation: 1.5rem moves pin from left (0.125rem) to right with padding */
-/* Total movement: track width (2.75rem) - pin width (1rem) - padding (0.125rem * 2) = 1.5rem */
+/* Total movement: track width (2.75rem) - pin width (1rem) - total padding (0.25rem) = 1.5rem */
+/* Total padding = left padding (0.125rem) + right padding (0.125rem) = 0.25rem */
 button[role="switch"][aria-checked="true"] > span,
 .toggle-switch[aria-checked="true"] > span {
 	transform: translateY(-50%) translateX(1.5rem) !important;
