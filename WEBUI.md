@@ -205,6 +205,34 @@ The release build will:
 3. Build the Astro-based web UI
 4. Embed the compiled UI assets in the binary
 
+### Frontend Development
+
+When making changes to the frontend (files in `src/webui/src/`), you need to rebuild the frontend:
+
+```bash
+# Navigate to the webui directory
+cd src/webui
+
+# Install dependencies (first time only)
+npm install
+
+# Build the frontend
+npm run build
+
+# Then rebuild the Rust binary in release mode
+cd ../..
+cargo build --release
+```
+
+Note: Frontend changes are only embedded in **release builds**. Debug builds show placeholder pages. For rapid frontend development, you can use Astro's dev server:
+
+```bash
+cd src/webui
+npm run dev
+```
+
+This starts a development server at `http://localhost:4321` with hot reload.
+
 ## Technology Stack
 
 ### Backend
