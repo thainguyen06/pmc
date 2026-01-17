@@ -190,7 +190,7 @@ pub struct Watch {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Runner {
     pub id: id::Id,
-    #[serde(skip)]
+    #[serde(skip, default)]
     pub remote: Option<Remote>,
     pub list: BTreeMap<usize, Process>,
 }
