@@ -47,7 +47,7 @@ const { title, description } = Astro.props;
 			}
 			
 			/* Prevent toggle switch shape issues on initial load */
-			/* Note: These dimensions match the Tailwind classes (h-5 w-9, h-4 w-4) used in components */
+			/* Note: Pill-shaped toggle with 2.2:1 width-to-height ratio for proper appearance */
 			/* Duplicated from styles.css as critical CSS for immediate rendering */
 			button[role="switch"],
 			.toggle-switch {
@@ -55,8 +55,8 @@ const { title, description } = Astro.props;
 				align-items: center !important;
 				justify-content: flex-start !important;
 				position: relative !important;
-				height: 1.25rem !important;
-				width: 2.25rem !important;
+				height: 1.25rem !important; /* 20px */
+				width: 2.75rem !important; /* 44px - wider for pill shape */
 				flex-shrink: 0 !important;
 				border-radius: 9999px !important;
 			}
@@ -67,15 +67,15 @@ const { title, description } = Astro.props;
 				left: 0.125rem !important;
 				transform: translateY(-50%) !important;
 				display: inline-block !important;
-				height: 1rem !important;
-				width: 1rem !important;
+				height: 1rem !important; /* 16px */
+				width: 1rem !important; /* 16px */
 				border-radius: 9999px !important;
 				background-color: white !important;
 				transition: transform 200ms ease-in-out !important;
 			}
 			button[role="switch"][aria-checked="true"] > span,
 			.toggle-switch[aria-checked="true"] > span {
-				transform: translateY(-50%) translateX(1rem) !important;
+				transform: translateY(-50%) translateX(1.5rem) !important; /* Adjusted for wider track */
 			}
 		</style>
 		
