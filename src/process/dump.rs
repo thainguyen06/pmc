@@ -63,7 +63,15 @@ pub fn read() -> Runner {
                 global!("opm.dump"),
                 chrono::Utc::now().format("%Y%m%d_%H%M%S")
             );
-            if let Err(e) = fs::rename(global!("opm.dump"), &backup_path) {
+            
+            // Try rename first (fast for same filesystem), fall back to copy+remove for cross-filesystem
+            let backup_result = fs::rename(global!("opm.dump"), &backup_path)
+                .or_else(|_| {
+                    fs::copy(global!("opm.dump"), &backup_path)
+                        .and_then(|_| fs::remove_file(global!("opm.dump")))
+                });
+            
+            if let Err(e) = backup_result {
                 log!("[dump::read] Failed to backup corrupted file: {e}");
             } else {
                 println!("{} Backed up corrupted file to: {}", *helpers::SUCCESS, backup_path);
