@@ -330,6 +330,42 @@ pub fn from_object<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> T {
     }
 }
 
+pub fn try_read_object<T: serde::de::DeserializeOwned>(path: String) -> Result<T, String> {
+    let mut retry_count = 0;
+    let max_retries = 5;
+
+    let bytes = loop {
+        match fs::read(&path) {
+            Ok(contents) => break contents,
+            Err(err) => {
+                retry_count += 1;
+                if retry_count >= max_retries {
+                    log!("file::read] Cannot find file: {err}");
+                    return Err(format!("Cannot find file: {}", err));
+                } else {
+                    log!(
+                        "file::read] Error reading file. Retrying... (Attempt {retry_count}/{max_retries})"
+                    );
+                    println!(
+                        "{} Error reading file. Retrying... (Attempt {retry_count}/{max_retries})",
+                        *helpers::FAIL
+                    );
+                }
+            }
+        }
+        sleep(Duration::from_secs(1));
+    };
+
+    // Parse the file content - return error if parsing fails
+    match ron::de::from_bytes(&bytes) {
+        Ok(parsed) => Ok(parsed),
+        Err(err) => {
+            log!("[file::parse] Cannot parse file: {err}");
+            Err(format!("Cannot parse file: {}", err))
+        }
+    }
+}
+
 pub fn read_object<T: serde::de::DeserializeOwned>(path: String) -> T {
     let mut retry_count = 0;
     let max_retries = 5;
@@ -360,31 +396,16 @@ pub fn read_object<T: serde::de::DeserializeOwned>(path: String) -> T {
         sleep(Duration::from_secs(1));
     };
 
-    retry_count = 0;
-
-    loop {
-        match ron::de::from_bytes(&bytes) {
-            Ok(parsed) => break parsed,
-            Err(err) => {
-                retry_count += 1;
-                if retry_count >= max_retries {
-                    log!("[file::parse] Cannot parse file: {err}");
-                    crashln!(
-                        "{} Cannot parse file.\n{}",
-                        *helpers::FAIL,
-                        string!(err).white()
-                    );
-                } else {
-                    log!(
-                        "[file::parse] Error parsing file. Retrying... (Attempt {retry_count}/{max_retries})"
-                    );
-                    println!(
-                        "{} Error parsing file. Retrying... (Attempt {retry_count}/{max_retries})",
-                        *helpers::FAIL
-                    );
-                }
-            }
+    // Parse the file content - no retry loop needed as corrupted content won't fix itself
+    match ron::de::from_bytes(&bytes) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            log!("[file::parse] Cannot parse file: {err}");
+            crashln!(
+                "{} Cannot parse file.\n{}",
+                *helpers::FAIL,
+                string!(err).white()
+            );
         }
-        sleep(Duration::from_secs(1));
     }
 }
