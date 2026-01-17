@@ -25,6 +25,56 @@ const { title, description } = Astro.props;
 	
 		<title>{title}</title>
 		<link rel="icon" type="image/svg+xml" href="{{base_path | safe}}/assets/favicon.svg" />
+		
+		<!-- Critical CSS inlined to prevent FOUC -->
+		<style>
+			/* Prevent navbar centering on initial load */
+			nav {
+				display: flex !important;
+				justify-content: flex-start !important;
+				align-items: center !important;
+			}
+			nav > div {
+				display: flex !important;
+				justify-content: flex-start !important;
+				align-items: center !important;
+				width: 100% !important;
+			}
+			nav > div > div {
+				justify-content: flex-start !important;
+			}
+			
+			/* Prevent toggle switch shape issues on initial load */
+			button[role="switch"],
+			.toggle-switch {
+				display: inline-flex !important;
+				align-items: center !important;
+				justify-content: flex-start !important;
+				position: relative !important;
+				height: 1.25rem !important;
+				width: 2.25rem !important;
+				flex-shrink: 0 !important;
+				border-radius: 9999px !important;
+			}
+			button[role="switch"] > span,
+			.toggle-switch > span {
+				position: absolute !important;
+				top: 50% !important;
+				left: 0.125rem !important;
+				transform: translateY(-50%) !important;
+				display: inline-block !important;
+				height: 1rem !important;
+				width: 1rem !important;
+				border-radius: 9999px !important;
+				background-color: white !important;
+				transition: transform 200ms ease-in-out !important;
+			}
+			button[role="switch"][aria-checked="true"] > span,
+			.toggle-switch[aria-checked="true"] > span {
+				transform: translateY(-50%) translateX(1rem) !important;
+			}
+		</style>
+		
 		<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 	
 		<meta name="title" content={title} />

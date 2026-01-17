@@ -42,6 +42,7 @@ nav a {
 
 /* Toggle switch precision alignment - prevent misalignment */
 /* Note: !important used to ensure immediate application and prevent FOUC */
+/* Track dimensions: width 2.25rem (9 * 0.25rem), height 1.25rem (5 * 0.25rem) */
 button[role="switch"],
 .toggle-switch {
 	display: inline-flex !important;
@@ -50,10 +51,13 @@ button[role="switch"],
 	vertical-align: middle !important;
 	flex-shrink: 0 !important;
 	position: relative !important;
+	width: 2.25rem !important; /* w-9 */
+	height: 1.25rem !important; /* h-5 */
+	border-radius: 9999px !important; /* rounded-full */
 }
 
 /* Ensure toggle pin is perfectly centered within track */
-/* Pin dimensions: 4w x 4h (1rem), Track dimensions: 9w x 5h (2.25rem x 1.25rem) */
+/* Pin dimensions: 1rem x 1rem (w-4 h-4) */
 /* Horizontal offset: 0.125rem (2px) provides visual padding from track edge */
 /* Vertical centering: 50% + translateY(-50%) for perfect alignment */
 button[role="switch"] > span,
@@ -64,6 +68,10 @@ button[role="switch"] > span,
 	left: 0.125rem !important; /* 2px visual padding */
 	transform: translateY(-50%) !important;
 	display: inline-block !important;
+	width: 1rem !important; /* w-4 */
+	height: 1rem !important; /* h-4 */
+	border-radius: 9999px !important; /* rounded-full */
+	background-color: white !important;
 	line-height: 1 !important;
 	vertical-align: middle !important;
 	transition: transform 200ms ease-in-out !important;
