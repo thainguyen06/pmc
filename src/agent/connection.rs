@@ -41,6 +41,9 @@ impl AgentConnection {
         let register_url = format!("{}/daemon/agents/register", self.config.server_url);
         let heartbeat_url = format!("{}/daemon/agents/heartbeat", self.config.server_url);
 
+        // Construct the API endpoint URL
+        let api_endpoint = format!("http://{}:{}", self.config.api_address, self.config.api_port);
+
         // Initial registration
         let mut request = client.post(&register_url)
             .json(&json!({
@@ -49,6 +52,7 @@ impl AgentConnection {
                 "hostname": hostname::get()
                     .ok()
                     .and_then(|h| h.into_string().ok()),
+                "api_endpoint": api_endpoint,
             }));
 
         if let Some(ref token) = self.config.token {
@@ -59,6 +63,7 @@ impl AgentConnection {
             Ok(response) => {
                 if response.status().is_success() {
                     println!("[Agent] Successfully registered with server");
+                    println!("[Agent] API endpoint: {}", api_endpoint);
                     self.status = AgentStatus::Online;
                 } else {
                     let status = response.status();
@@ -111,6 +116,7 @@ impl AgentConnection {
 
     pub fn get_info(&self) -> AgentInfo {
         use super::types::ConnectionType;
+        let api_endpoint = format!("http://{}:{}", self.config.api_address, self.config.api_port);
         AgentInfo {
             id: self.config.id.clone(),
             name: self.config.name.clone(),
@@ -121,6 +127,7 @@ impl AgentConnection {
             connection_type: ConnectionType::Out,
             last_seen: std::time::SystemTime::now(),
             connected_at: std::time::SystemTime::now(),
+            api_endpoint: Some(api_endpoint),
         }
     }
 }

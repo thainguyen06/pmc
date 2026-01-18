@@ -251,6 +251,7 @@ pub fn health(format: &String) {
         external: String,
         #[tabled(rename = "process count")]
         process_count: usize,
+        role: String,
         uptime: String,
         pid: String,
         status: ColoredString,
@@ -264,6 +265,7 @@ pub fn health(format: &String) {
              "cpu": &self.cpu_percent.trim(),
              "mem": &self.memory_usage.trim(),
              "process_count": &self.process_count.to_string(),
+             "role": &self.role,
              "uptime": &self.uptime.trim(),
              "pid": &self.pid.trim(),
              "status": &self.status.0.trim(),
@@ -335,6 +337,7 @@ pub fn health(format: &String) {
         path: global!("opm.base"),
         external: global!("opm.daemon.kind"),
         process_count: runner.count(),
+        role: config::read().get_role_name().to_string(),
         pid_file: format!("{}  ", global!("opm.pid")),
         status: ColoredString(ternary!(
             daemon_running,

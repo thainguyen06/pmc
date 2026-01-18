@@ -1147,6 +1147,9 @@ impl<'i> Internal<'i> {
     }
 
     pub fn list(format: &String, server_name: &String) {
+        // Check permissions for remote operations
+        super::check_remote_permission(server_name);
+        
         let render_list = |runner: &mut Runner, internal: bool| {
             let mut processes: Vec<ProcessItem> = Vec::new();
 

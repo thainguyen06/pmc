@@ -1743,6 +1743,7 @@ pub struct AgentRegisterBody {
     pub id: String,
     pub name: String,
     pub hostname: Option<String>,
+    pub api_endpoint: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -1779,6 +1780,7 @@ pub async fn agent_register_handler(
         connection_type: opm::agent::types::ConnectionType::In,
         last_seen: std::time::SystemTime::now(),
         connected_at: std::time::SystemTime::now(),
+        api_endpoint: body.api_endpoint.clone(),
     };
 
     registry.register(agent_info);

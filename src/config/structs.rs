@@ -2,7 +2,23 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub mod prelude {
-    pub use super::{Config, Daemon, Runner, Server, Servers, Secure, Web, Notifications};
+    pub use super::{Config, Daemon, Runner, Server, Servers, Secure, Web, Notifications, Role};
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub enum Role {
+    /// Server role: can control all processes (local + all agents)
+    Server,
+    /// Agent role: can only control own local processes
+    Agent,
+    /// Standalone role: default mode, operates independently
+    Standalone,
+}
+
+impl Default for Role {
+    fn default() -> Self {
+        Role::Standalone
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -10,6 +26,8 @@ pub struct Config {
     pub default: String,
     pub runner: Runner,
     pub daemon: Daemon,
+    #[serde(default)]
+    pub role: Role,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

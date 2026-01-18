@@ -70,6 +70,7 @@ pub fn read() -> Config {
                         },
                         notifications: None,
                     },
+                    role: structs::Role::Standalone,
                 };
 
                 let contents = match toml::to_string(&config) {
@@ -196,5 +197,29 @@ impl Config {
 
     pub fn fmt_address(&self) -> String {
         format!("{}:{}", self.daemon.web.address, self.daemon.web.port)
+    }
+
+    /// Check if the current role allows controlling agent processes
+    pub fn can_control_agents(&self) -> bool {
+        matches!(self.role, structs::Role::Server)
+    }
+
+    /// Check if the current role is an agent
+    pub fn is_agent(&self) -> bool {
+        matches!(self.role, structs::Role::Agent)
+    }
+
+    /// Check if the current role is a server
+    pub fn is_server(&self) -> bool {
+        matches!(self.role, structs::Role::Server)
+    }
+
+    /// Get the role as a string
+    pub fn get_role_name(&self) -> &str {
+        match self.role {
+            structs::Role::Server => "server",
+            structs::Role::Agent => "agent",
+            structs::Role::Standalone => "standalone",
+        }
     }
 }
