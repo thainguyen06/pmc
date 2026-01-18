@@ -42,7 +42,7 @@ fn use_system_node_or_download() -> PathBuf {
                 // Get the bin directory containing node
                 let node_path = PathBuf::from(node_bin);
                 if let Some(bin_dir) = node_path.parent() {
-                    println!("cargo:warning=Using system Node.js from {:?}", bin_dir);
+                    eprintln!("Using system Node.js from {:?}", bin_dir);
                     return bin_dir.to_path_buf();
                 }
             }
@@ -50,7 +50,7 @@ fn use_system_node_or_download() -> PathBuf {
     }
     
     // Fall back to downloading Node.js
-    println!("cargo:warning=System Node.js not found, downloading...");
+    eprintln!("System Node.js not found, downloading...");
     download_node()
 }
 
