@@ -6,7 +6,7 @@ pub(crate) mod internal;
 
 use internal::{Internal, STATS_PRE_LIST_DELAY_MS};
 use macros_rs::{crashln, string, ternary};
-use opm::{helpers, process::Runner};
+use opm::{config, helpers, process::Runner};
 use std::env;
 use std::thread;
 use std::time::Duration;
@@ -19,6 +19,19 @@ pub(crate) fn format(server_name: &String) -> (String, String) {
     )
     .to_string();
     return (kind, server_name.to_string());
+}
+
+/// Check if the current role allows remote operations
+pub(crate) fn check_remote_permission(server_name: &String) {
+    let config = config::read();
+    
+    // If trying to access a remote server and role is agent, deny
+    if config.is_agent() && !matches!(&**server_name, "internal" | "local") {
+        crashln!(
+            "{} Agent role cannot perform remote operations. Only local process management is allowed.",
+            *helpers::FAIL
+        );
+    }
 }
 
 pub fn get_version(short: bool) -> String {
@@ -51,6 +64,9 @@ pub fn start(
     workers: &Option<usize>,
     port_range: &Option<String>,
 ) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let mut runner = Runner::new();
     let (kind, list_name) = format(server_name);
 
@@ -231,6 +247,9 @@ fn parse_port_range(port_str: &str) -> Vec<u16> {
 }
 
 pub fn stop(items: &Items, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let mut runner: Runner = Runner::new();
     let (kind, list_name) = format(server_name);
 
@@ -284,6 +303,9 @@ pub fn stop(items: &Items, server_name: &String) {
 }
 
 pub fn remove(items: &Items, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
@@ -333,6 +355,9 @@ pub fn remove(items: &Items, server_name: &String) {
 }
 
 pub fn info(item: &Item, format: &String, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = self::format(server_name);
 
@@ -366,6 +391,9 @@ pub fn logs(
     errors_only: bool,
     stats: bool,
 ) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
@@ -392,6 +420,9 @@ pub fn logs(
 
 // combine into a single function that handles multiple
 pub fn env(item: &Item, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
@@ -417,6 +448,9 @@ pub fn env(item: &Item, server_name: &String) {
 }
 
 pub fn flush(item: &Item, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
@@ -442,6 +476,9 @@ pub fn flush(item: &Item, server_name: &String) {
 }
 
 pub fn restart(items: &Items, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let mut runner: Runner = Runner::new();
     let (kind, list_name) = format(server_name);
 
@@ -500,6 +537,9 @@ pub fn restart(items: &Items, server_name: &String) {
 }
 
 pub fn reload(items: &Items, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let mut runner: Runner = Runner::new();
     let (kind, list_name) = format(server_name);
 
@@ -558,6 +598,9 @@ pub fn reload(items: &Items, server_name: &String) {
 }
 
 pub fn get_command(item: &Item, server_name: &String) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
@@ -588,6 +631,9 @@ pub fn adjust(
     name: &Option<String>,
     server_name: &String,
 ) {
+    // Check permissions for remote operations
+    check_remote_permission(server_name);
+    
     let runner: Runner = Runner::new();
     let (kind, _) = format(server_name);
 
