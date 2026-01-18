@@ -1,8 +1,35 @@
 use super::types::{AgentConfig, AgentInfo, AgentStatus};
 use anyhow::{Result, anyhow};
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time::sleep;
+use tokio_tungstenite::{connect_async, tungstenite::Message};
+use futures_util::{StreamExt, SinkExt};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AgentMessage {
+    /// Agent registration message
+    Register {
+        id: String,
+        name: String,
+        hostname: Option<String>,
+        api_endpoint: Option<String>,
+    },
+    /// Heartbeat/ping message
+    Heartbeat {
+        id: String,
+    },
+    /// Response message
+    Response {
+        success: bool,
+        message: String,
+    },
+    /// Ping message from server to agent
+    Ping,
+    /// Pong response from agent
+    Pong,
+}
 
 pub struct AgentConnection {
     config: AgentConfig,
@@ -17,13 +44,13 @@ impl AgentConnection {
         }
     }
 
-    /// Start the agent connection using HTTP polling
+    /// Start the agent connection using WebSocket
     pub async fn run(&mut self) -> Result<()> {
         println!("[Agent] Starting agent '{}' (ID: {})", self.config.name, self.config.id);
         println!("[Agent] Connecting to server: {}", self.config.server_url);
 
         loop {
-            if let Err(e) = self.polling_mode().await {
+            if let Err(e) = self.websocket_mode().await {
                 eprintln!("[Agent] Connection error: {}", e);
                 self.status = AgentStatus::Reconnecting;
             }
@@ -34,81 +61,156 @@ impl AgentConnection {
         }
     }
 
-    async fn polling_mode(&mut self) -> Result<()> {
-        println!("[Agent] Starting HTTP polling mode");
+    async fn websocket_mode(&mut self) -> Result<()> {
+        println!("[Agent] Starting WebSocket connection mode");
         
-        let client = reqwest::Client::new();
-        let register_url = format!("{}/daemon/agents/register", self.config.server_url);
-        let heartbeat_url = format!("{}/daemon/agents/heartbeat", self.config.server_url);
+        // Parse server URL and construct WebSocket URL
+        // Expected format: http://host:port or https://host:port
+        let server_url = self.config.server_url.trim_end_matches('/');
+        
+        // Extract the port from server URL and add 1 for WebSocket port
+        let ws_url = if server_url.starts_with("https://") {
+            let base = server_url.strip_prefix("https://").unwrap();
+            let (host, port) = if base.contains(':') {
+                let parts: Vec<&str> = base.split(':').collect();
+                let port: u16 = parts[1].parse().unwrap_or(9876);
+                (parts[0], port + 1)
+            } else {
+                (base, 9877) // Default HTTPS port 443 + 1 would be 444, but use 9877 for consistency
+            };
+            format!("wss://{}:{}/ws/agent", host, port)
+        } else {
+            let base = server_url.strip_prefix("http://").unwrap_or(server_url);
+            let (host, port) = if base.contains(':') {
+                let parts: Vec<&str> = base.split(':').collect();
+                let port: u16 = parts[1].parse().unwrap_or(9876);
+                (parts[0], port + 1)
+            } else {
+                (base, 9877) // Default port + 1
+            };
+            format!("ws://{}:{}/ws/agent", host, port)
+        };
+
+        println!("[Agent] Connecting to WebSocket: {}", ws_url);
+
+        // Connect to WebSocket server
+        let (ws_stream, _) = connect_async(&ws_url).await
+            .map_err(|e| anyhow!("Failed to connect to WebSocket: {}", e))?;
+        
+        let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
         // Construct the API endpoint URL
         let api_endpoint = format!("http://{}:{}", self.config.api_address, self.config.api_port);
 
-        // Initial registration
-        let mut request = client.post(&register_url)
-            .json(&json!({
-                "id": self.config.id,
-                "name": self.config.name,
-                "hostname": hostname::get()
-                    .ok()
-                    .and_then(|h| h.into_string().ok()),
-                "api_endpoint": api_endpoint,
-            }));
+        // Send registration message
+        let register_msg = AgentMessage::Register {
+            id: self.config.id.clone(),
+            name: self.config.name.clone(),
+            hostname: hostname::get()
+                .ok()
+                .and_then(|h| h.into_string().ok()),
+            api_endpoint: Some(api_endpoint.clone()),
+        };
 
-        if let Some(ref token) = self.config.token {
-            request = request.header("token", token);
-        }
+        let register_json = serde_json::to_string(&register_msg)
+            .map_err(|e| anyhow!("Failed to serialize registration: {}", e))?;
+        
+        ws_sender.send(Message::Text(register_json)).await
+            .map_err(|e| anyhow!("Failed to send registration: {}", e))?;
 
-        match request.send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    println!("[Agent] Successfully registered with server");
-                    println!("[Agent] API endpoint: {}", api_endpoint);
-                    self.status = AgentStatus::Online;
-                } else {
-                    let status = response.status();
-                    let body = response.text().await.unwrap_or_default();
-                    eprintln!("[Agent] Registration failed with status {}: {}", status, body);
-                    return Err(anyhow!("Registration failed with status: {}", status));
-                }
-            }
-            Err(e) => {
-                eprintln!("[Agent] Registration request failed: {}", e);
-                return Err(anyhow!(e));
-            }
-        }
+        println!("[Agent] Registration sent");
 
-        // Heartbeat loop
-        loop {
-            sleep(Duration::from_secs(self.config.heartbeat_interval)).await;
-
-            let mut request = client.post(&heartbeat_url)
-                .json(&json!({
-                    "id": self.config.id,
-                }));
-
-            if let Some(ref token) = self.config.token {
-                request = request.header("token", token);
-            }
-
-            match request.send().await {
-                Ok(response) => {
-                    if response.status().is_success() {
-                        println!("[Agent] Heartbeat sent successfully");
-                    } else {
-                        let status = response.status();
-                        // If agent was removed from server (404), exit gracefully instead of reconnecting
-                        if status == reqwest::StatusCode::NOT_FOUND {
-                            eprintln!("[Agent] Agent has been removed from server. Disconnecting...");
-                            std::process::exit(0);
+        // Wait for registration response
+        if let Some(msg) = ws_receiver.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    if let Ok(response) = serde_json::from_str::<AgentMessage>(&text) {
+                        if let AgentMessage::Response { success, message } = response {
+                            if success {
+                                println!("[Agent] Successfully registered with server");
+                                println!("[Agent] API endpoint: {}", api_endpoint);
+                                self.status = AgentStatus::Online;
+                            } else {
+                                return Err(anyhow!("Registration failed: {}", message));
+                            }
                         }
-                        eprintln!("[Agent] Heartbeat failed with status: {}", status);
-                        return Err(anyhow!("Heartbeat failed with status: {}", status));
                     }
                 }
+                Ok(Message::Close(_)) => {
+                    return Err(anyhow!("Server closed connection"));
+                }
                 Err(e) => {
-                    eprintln!("[Agent] Heartbeat request failed: {}", e);
-                    return Err(anyhow!(e));
+                    return Err(anyhow!("WebSocket error: {}", e));
+                }
+                _ => {}
+            }
+        }
+
+        // Start heartbeat loop
+        let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(self.config.heartbeat_interval));
+        
+        loop {
+            tokio::select! {
+                // Send heartbeat periodically
+                _ = heartbeat_interval.tick() => {
+                    let heartbeat_msg = AgentMessage::Heartbeat {
+                        id: self.config.id.clone(),
+                    };
+                    
+                    if let Ok(heartbeat_json) = serde_json::to_string(&heartbeat_msg) {
+                        if let Err(e) = ws_sender.send(Message::Text(heartbeat_json)).await {
+                            eprintln!("[Agent] Failed to send heartbeat: {}", e);
+                            return Err(anyhow!("Heartbeat failed: {}", e));
+                        }
+                        println!("[Agent] Heartbeat sent successfully");
+                    }
+                }
+                
+                // Receive messages from server
+                msg = ws_receiver.next() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            if let Ok(response) = serde_json::from_str::<AgentMessage>(&text) {
+                                match response {
+                                    AgentMessage::Response { success, message } => {
+                                        if !success {
+                                            if message.contains("not found") {
+                                                eprintln!("[Agent] Agent has been removed from server. Disconnecting...");
+                                                std::process::exit(0);
+                                            }
+                                            eprintln!("[Agent] Server response: {}", message);
+                                            return Err(anyhow!("Server error: {}", message));
+                                        }
+                                    }
+                                    AgentMessage::Ping => {
+                                        // Respond to ping with pong
+                                        let pong_msg = AgentMessage::Pong;
+                                        if let Ok(pong_json) = serde_json::to_string(&pong_msg) {
+                                            let _ = ws_sender.send(Message::Text(pong_json)).await;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        Some(Ok(Message::Ping(data))) => {
+                            // Respond to WebSocket ping with pong
+                            let _ = ws_sender.send(Message::Pong(data)).await;
+                        }
+                        Some(Ok(Message::Close(_))) => {
+                            println!("[Agent] Server closed connection");
+                            return Err(anyhow!("Server closed connection"));
+                        }
+                        Some(Err(e)) => {
+                            eprintln!("[Agent] WebSocket error: {}", e);
+                            return Err(anyhow!("WebSocket error: {}", e));
+                        }
+                        None => {
+                            println!("[Agent] WebSocket stream ended");
+                            return Err(anyhow!("WebSocket stream ended"));
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
@@ -124,7 +226,7 @@ impl AgentConnection {
                 .ok()
                 .and_then(|h| h.into_string().ok()),
             status: self.status.clone(),
-            connection_type: ConnectionType::Out,
+            connection_type: ConnectionType::In,
             last_seen: std::time::SystemTime::now(),
             connected_at: std::time::SystemTime::now(),
             api_endpoint: Some(api_endpoint),

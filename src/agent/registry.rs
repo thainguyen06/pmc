@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// Registry for managing connected agents on the server side
+#[derive(Clone)]
 pub struct AgentRegistry {
     agents: Arc<RwLock<HashMap<String, AgentInfo>>>,
 }

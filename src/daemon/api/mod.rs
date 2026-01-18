@@ -3,6 +3,7 @@ mod fairing;
 mod helpers;
 mod routes;
 mod structs;
+mod websocket;
 
 use crate::webui::{self, assets::NamedFile};
 use helpers::{create_status, NotFound};
@@ -244,6 +245,19 @@ pub async fn start(webui: bool) {
     let agent_registry = opm::agent::registry::AgentRegistry::new();
     // Note: Don't wrap in Arc here - Rocket's state management handles sharing
     // let agent_registry = Arc::new(agent_registry);
+    
+    log::info!("API start: Starting WebSocket server for agents");
+    // Start WebSocket server for agent connections on a different port
+    let ws_address = format!("{}:{}", 
+        config::read().daemon.web.address, 
+        config::read().daemon.web.port + 1  // Use port + 1 for WebSocket
+    );
+    let agent_registry_ws = std::sync::Arc::new(agent_registry.clone());
+    tokio::spawn(async move {
+        if let Err(e) = websocket::start_websocket_server(ws_address, agent_registry_ws).await {
+            log::error!("WebSocket server error: {}", e);
+        }
+    });
 
     log::info!("API start: Building routes");
     let routes = rocket::routes![
