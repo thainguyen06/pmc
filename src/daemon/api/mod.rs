@@ -392,7 +392,7 @@ async fn dynamic_assets(name: String) -> Option<NamedFile> {
 
     #[cfg(debug_assertions)]
     {
-        let _ = name; // Used only in non-debug builds
+        let _ = name; // Unused in debug builds (used in non-debug above)
         None
     }
 }
