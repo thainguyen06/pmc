@@ -1,36 +1,11 @@
 use opm::agent::registry::AgentRegistry;
 use opm::agent::types::{AgentInfo, AgentStatus, ConnectionType};
+use opm::agent::messages::AgentMessage;
 use rocket::tokio;
 use rocket::tokio::net::{TcpListener, TcpStream};
 use futures_util::{StreamExt, SinkExt};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum AgentMessage {
-    /// Agent registration message
-    Register {
-        id: String,
-        name: String,
-        hostname: Option<String>,
-        api_endpoint: Option<String>,
-    },
-    /// Heartbeat/ping message
-    Heartbeat {
-        id: String,
-    },
-    /// Response message
-    Response {
-        success: bool,
-        message: String,
-    },
-    /// Ping message from server to agent
-    Ping,
-    /// Pong response from agent
-    Pong,
-}
 
 /// Start the WebSocket server for agent connections
 pub async fn start_websocket_server(

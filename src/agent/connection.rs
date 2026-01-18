@@ -1,35 +1,10 @@
 use super::types::{AgentConfig, AgentInfo, AgentStatus};
+use super::messages::AgentMessage;
 use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use futures_util::{StreamExt, SinkExt};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum AgentMessage {
-    /// Agent registration message
-    Register {
-        id: String,
-        name: String,
-        hostname: Option<String>,
-        api_endpoint: Option<String>,
-    },
-    /// Heartbeat/ping message
-    Heartbeat {
-        id: String,
-    },
-    /// Response message
-    Response {
-        success: bool,
-        message: String,
-    },
-    /// Ping message from server to agent
-    Ping,
-    /// Pong response from agent
-    Pong,
-}
 
 pub struct AgentConnection {
     config: AgentConfig,
@@ -68,25 +43,31 @@ impl AgentConnection {
         // Expected format: http://host:port or https://host:port
         let server_url = self.config.server_url.trim_end_matches('/');
         
-        // Extract the port from server URL and add 1 for WebSocket port
+        // Extract host and port, then add 1 to port for WebSocket connection
         let ws_url = if server_url.starts_with("https://") {
             let base = server_url.strip_prefix("https://").unwrap();
             let (host, port) = if base.contains(':') {
                 let parts: Vec<&str> = base.split(':').collect();
-                let port: u16 = parts[1].parse().unwrap_or(9876);
+                let port: u16 = parts.get(1)
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(443);
                 (parts[0], port + 1)
             } else {
-                (base, 9877) // Default HTTPS port 443 + 1 would be 444, but use 9877 for consistency
+                // No port specified, use default HTTPS port + 1
+                (base, 444)
             };
             format!("wss://{}:{}/ws/agent", host, port)
         } else {
             let base = server_url.strip_prefix("http://").unwrap_or(server_url);
             let (host, port) = if base.contains(':') {
                 let parts: Vec<&str> = base.split(':').collect();
-                let port: u16 = parts[1].parse().unwrap_or(9876);
+                let port: u16 = parts.get(1)
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(80);
                 (parts[0], port + 1)
             } else {
-                (base, 9877) // Default port + 1
+                // No port specified, use default HTTP port + 1
+                (base, 81)
             };
             format!("ws://{}:{}/ws/agent", host, port)
         };
